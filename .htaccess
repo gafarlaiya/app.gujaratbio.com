@@ -6,3 +6,8 @@
   Header set Cache-Control "public, max-age=2592000"
 </FilesMatch>
 AddType application/manifest+json .webmanifest
+# Hide build/server files on plain hosting
+<FilesMatch "^(server\.js|package\.json|README\.md)$">
+  Require all denied
+</FilesMatch>
+RedirectMatch 404 /\.git
