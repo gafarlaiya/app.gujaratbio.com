@@ -124,3 +124,5 @@ textarea{min-height:110px}
 .look-0{background:#D6EFC9;color:#1F5A12}.look-1{background:#E5F2DF;color:#2E6B1F}.look-2{background:#FFF1CC;color:#7A5300}.look-3{background:#F9D3CF;color:#8E1B12}
 .ev.up{border-style:dashed}
 form h2{margin-top:18px}
+details.card summary{cursor:pointer;list-style:none}details.card summary::-webkit-details-marker{display:none}
+details.card summary strong::after{content:" ›";color:var(--leaf)}details.card[open] summary strong::after{content:" ⌄"}

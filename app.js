@@ -60,7 +60,8 @@ const fmtDate = d => new Date(d).toLocaleDateString("en-IN", { day: "numeric", m
 const today = () => new Date().toISOString().slice(0, 10);
 const plotById = id => ((ME && ME.plots) || []).find(p => p.id === id);
 const plotName = p => p.name || (crop(p.crop) || {}).name || p.crop;
-const areaTxt = p => p.area ? `${+p.area} ${UNITS[p.unit] || p.unit}` : "";
+const areaTxt = p => p.area ? `${+p.area} ${UNITS[p.unit] || p.unit}${p.unit === "vigha" && p.vigha_guntha ? ` (${p.vigha_guntha} g)` : ""}` : "";
+const acreTxt = p => { const a = acresOf(p); return a && p.unit !== "acre" ? `about ${Math.round(a * 100) / 100} acre` : ""; };
 const kind = k => KINDS.find(x => x.k === k) || KINDS[KINDS.length - 1];
 const HELP = "Facing any problem in your crop? Get help from an expert";
 const SOIL_TYPES = ["Black (cotton) soil", "Medium black", "Red soil", "Sandy", "Sandy loam", "Loam", "Clay", "Alluvial", "Saline / alkaline", "Rocky / murrum", "Not sure"];
@@ -75,6 +76,16 @@ const COUNT = ["Less than 4", "5 to 7", "8 to 10", "11 to 14", "15 or more"];
 const YIELD_UNITS = ["tonnes per acre", "tonnes per vigha", "quintal per acre", "quintal per vigha", "kg per plant", "kg per tree"];
 const VARIETIES = { sugarcane: ["Co 86032", "CoC 671", "Co 0238", "CoM 0265", "Co 86002", "CoVSI 9805", "Co 0118"], mango: ["Kesar", "Alphonso (Hapus)", "Rajapuri", "Langra", "Dashehari", "Totapuri", "Amrapali"], potato: ["Kufri Jyoti", "Kufri Pukhraj", "Lady Rosetta", "Kufri Chipsona", "Santana"], banana: ["Grand Naine (G9)", "Robusta", "Shrimanti", "Basrai"], apple: ["Royal Delicious", "Red Delicious", "Gala", "Granny Smith", "Fuji"], pomegranate: ["Bhagwa", "Ganesh", "Ruby", "Mridula"], citrus: ["Nagpur mandarin", "Kagzi lime", "Mosambi", "Kinnow"], onion: ["Agrifound Light Red", "N-53", "Bhima Super", "Pusa Red"], cotton: [], groundnut: ["GG 20", "GJG 32", "TG 37A", "Kadiri 6"] };
 const RATOON = ["sugarcane", "banana"];
+const VIGHA = [[24, "24 guntha (Vadodara, Surat, Navsari, Valsad, Tapi, Amreli, North Gujarat)"], [20, "20 guntha (Bharuch)"], [16, "16 guntha (Saurashtra)"], [13, "13 guntha (Kodinar, Morbi, Vankaner)"]];
+const vighaOpts = cur => `<option value="">Choose vigha size</option>` + VIGHA.map(([g, l]) => `<option value="${g}" ${+cur === g ? "selected" : ""}>${l}</option>`).join("");
+const PESTS = {
+  sugarcane: { pests: ["Early shoot borer", "Top shoot borer", "Internode borer", "White grub", "Termites", "Woolly aphid", "Pyrilla", "Scale insect", "Mealybug", "Whitefly"],
+               diseases: ["Red rot", "Smut (whip)", "Wilt", "Grassy shoot", "Pokkah boeng", "Rust", "Ratoon stunting", "Leaf scald", "Yellow leaf disease"] },
+  mango: { pests: ["Mango hopper", "Mealybug", "Fruit fly", "Stem borer", "Thrips", "Leaf webber", "Gall midge / psylla", "Stone weevil", "Scale insect"],
+           diseases: ["Powdery mildew", "Anthracnose", "Malformation", "Bacterial canker (black spot)", "Sooty mould", "Dieback", "Gummosis", "Stem-end rot", "Red rust"] } };
+const PESTS_ANY = { pests: ["Sucking pests (aphid, jassid, whitefly, thrips)", "Mites", "Borers", "Leaf-eating caterpillars", "Fruit fly", "Termites or white grub", "Nematodes"], diseases: ["Fungal leaf spots or blight", "Powdery or downy mildew", "Root rot or wilt", "Bacterial disease", "Viral disease (leaf curl, mosaic)"] };
+const LEVELS = ["None", "Low", "Medium", "High", "Severe"];
+const acresOf = p => !p.area ? null : p.unit === "acre" ? +p.area : p.unit === "hectare" ? p.area * 2.471 : p.vigha_guntha ? p.area * p.vigha_guntha / 40 : null;
 const COUNT_LABEL = { sugarcane: "Average tillers per clump", paddy: "Average tillers per hill", cereals: "Average tillers per plant", banana: "Suckers per plant" };
 function issueList(slug) {
   if (slug === "sugarcane") return ["Poor germination", "Weak growth", "Less tillers", "Low stalk height", "Thin stalks", "Low stalk weight", "Dying of stalks", "Weak crop attacked by pests and diseases", "Unfavourable weather", "Needed more fertilizers", "Increased chemical dependency", "Low recovery / sugar"];
@@ -142,13 +153,14 @@ function signup(next) {
     <label for="v">Village</label><input id="v">
     <div class="row"><div><label for="d">District</label><input id="d"></div>
     <div><label for="s">State</label><select id="s">${STATES.map(s => `<option>${s}</option>`).join("")}</select></div></div>
+    <label for="vg">Your vigha size</label><select id="vg">${vighaOpts()}<option value="0">I measure in acres</option></select>
     <p class="err" id="e" role="alert"></p>
     <button class="btn full" id="b">Start using Hariyo</button>
     <p class="small muted" style="margin-top:10px">We use your number only to help you with your crop. We never share it.</p>
   </form>`);
   $("#f").onsubmit = async ev => {
     ev.preventDefault(); $("#b").disabled = true; $("#e").textContent = "";
-    const { data, error } = await sb.rpc("hariyo_register", { p_name: $("#n").value, p_phone: $("#p").value, p_village: $("#v").value, p_district: $("#d").value, p_state: $("#s").value });
+    const { data, error } = await sb.rpc("hariyo_register", { p_name: $("#n").value, p_phone: $("#p").value, p_village: $("#v").value, p_district: $("#d").value, p_state: $("#s").value, p_vigha: +$("#vg").value || null });
     if (error) { $("#e").textContent = error.message.includes("10-digit") ? "Please enter your name and a 10-digit mobile number." : "Could not save. Check your internet and try again."; $("#b").disabled = false; return; }
     TOKEN = data; store.set("hariyo_token", data); await loadMe(); go(next || "#/farm");
   };
@@ -217,7 +229,7 @@ function field(id) {
   ${ups.length ? `<div class="card"><h2>Coming up</h2><ul class="diary">${ups.map(a => `<li class="ev up"><span class="ev-i">${kind(a.kind).icon}</span><div><div class="ev-d">${fmtDate(a.happened_on)} · planned</div><strong>${esc(kind(a.kind).l)}</strong>${a.product ? `<div>${esc(a.product)}</div>` : ""}<button class="x" data-delact="${a.id}">Delete</button></div></li>`).join("")}</ul></div>` : ""}
   ${lo ? `<div class="card"><h2>Crop status on ${fmtDate(lo.observed_on)}</h2>${obsFacts(lo, c)}</div>` : ""}
   <div class="card"><div class="plot"><h2>Field profile</h2><a class="x" href="#/profile/${p.id}">Edit</a></div>
-    <dl class="facts">${[["Variety", p.variety], ["Planting", p.plant_type], ["Soil", [sl.type, sl.condition].filter(Boolean).join(", ")], ["Soil pH", sl.ph], ["Soil EC", sl.ec], ["Water", [wt.source === "Other" ? wt.other : wt.source, wt.method].filter(Boolean).join(", ")], ["Water pH / EC / TDS", [wt.ph, wt.ec, wt.tds].some(Boolean) ? [wt.ph || "-", wt.ec || "-", wt.tds || "-"].join(" / ") : ""]].filter(x => x[1]).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("") || `<dd class="muted">Add soil, water and variety details so our expert can advise better.</dd>`}</dl>
+    <dl class="facts">${[["Variety", p.variety], ["Planting", p.plant_type], ["Soil", [sl.type, sl.condition].filter(Boolean).join(", ")], ["Soil pH", sl.ph], ["Soil EC", sl.ec], ["Water", [wt.source === "Other" ? wt.other : wt.source, wt.method].filter(Boolean).join(", ")], ["Water pH / EC / TDS", [wt.ph, wt.ec, wt.tds].some(Boolean) ? [wt.ph || "-", wt.ec || "-", wt.tds || "-"].join(" / ") : ""], ["Area", acreTxt(p) ? areaTxt(p) + ", " + acreTxt(p) : ""], ["Pests and diseases this year", pestTxt((p.pests || {}).this)], ["Pests and diseases last year", pestTxt((p.pests || {}).last)]].filter(x => x[1]).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("") || `<dd class="muted">Add soil, water and variety details so our expert can advise better.</dd>`}</dl>
     ${(p.issues || []).length ? `<h3>Problems this year</h3><p>${p.issues.map(x => `<span class="tag new">${esc(x)}</span>`).join(" ")}</p>` : ""}
     ${ly.yield || (ly.problems || []).length ? `<h3>Last year</h3><p class="small">${ly.variety ? esc(ly.variety) + " · " : ""}${ly.yield ? esc(ly.yield + " " + (ly.yield_unit || "")) : ""}</p>${(ly.problems || []).length ? `<p>${ly.problems.map(x => `<span class="tag">${esc(x)}</span>`).join(" ")}</p>` : ""}` : ""}</div>
   <h2>Field diary</h2>
@@ -271,7 +283,7 @@ function logForm(id) {
       <label for="pr">Fertilizer or product name</label><input id="pr" list="pl" placeholder="Type or choose"><datalist id="pl">${prods.map(x => `<option value="${esc(x)}">`).join("")}</datalist>
       <div class="row"><div><label for="q">Quantity</label><input id="q" type="number" inputmode="decimal" min="0" step="any"></div>
       <div><label for="qu">Unit</label><select id="qu"><option>kg</option><option>g</option><option>bags</option><option>L</option><option>ml</option></select></div></div>
-      <label for="pu">Quantity is</label><select id="pu"><option value="${p.unit === "vigha" ? "vigha" : "acre"}">per ${p.unit === "vigha" ? "vigha" : "acre"}</option><option value="${p.unit === "vigha" ? "acre" : "vigha"}">per ${p.unit === "vigha" ? "acre" : "vigha"}</option><option value="plant">per plant / tree</option><option value="total">total for this field</option></select>
+      <label for="pu">Quantity is</label><select id="pu"><option value="${p.unit === "vigha" ? "vigha" : "acre"}">per ${p.unit === "vigha" ? `vigha${p.vigha_guntha ? ` (${p.vigha_guntha} guntha)` : ""}` : "acre"}</option><option value="${p.unit === "vigha" ? "acre" : "vigha"}">per ${p.unit === "vigha" ? "acre" : "vigha"}</option><option value="plant">per plant / tree</option><option value="total">total for this field</option></select>
       <label for="m">How did you apply it?</label><select id="m"><option value="">Choose</option>${METHODS.map(m => `<option>${esc(m)}</option>`).join("")}</select>
     </div>
     <label for="nt">Note (optional)</label><input id="nt" placeholder="Example: mixed with irrigation water">
@@ -295,7 +307,7 @@ function profileForm(id) {
   setTab("home");
   if (!needMe(location.hash)) return;
   const p = plotById(id); if (!p) return home();
-  const c = crop(p.crop), sl = p.soil || {}, wt = p.water || {}, ly = p.last_year || {}, iss = issueList(c.slug);
+  const c = crop(p.crop), sl = p.soil || {}, wt = p.water || {}, ly = p.last_year || {}, iss = issueList(c.slug), PL = PESTS[c.slug] || PESTS_ANY;
   render(`<p><a href="#/field/${p.id}">← ${esc(plotName(p))}</a></p><h1>Field profile</h1><p class="muted">${esc(plotName(p))} · ${esc(c.name)}. The more you fill in, the better our expert can advise.</p>
   <form class="card" id="f">
     <h2>Field photo</h2>
@@ -312,10 +324,12 @@ function profileForm(id) {
     <div id="wow"><label for="wo">Please specify</label><input id="wo" value="${esc(wt.other || "")}"></div>
     <div class="row three"><div><label for="wp">Water pH</label><select id="wp">${opts(LNH, wt.ph)}</select></div><div><label for="we">Water EC</label><select id="we">${opts(LNH, wt.ec)}</select></div><div><label for="wd">Water TDS</label><select id="wd">${opts(LNH, wt.tds)}</select></div></div>
     <h2>Problems this year</h2>${chips("iy", iss, p.issues)}
+    ${pestBlock("Pest and disease attack this year", "pt", (p.pests || {}).this, PL)}
     <h2>Last year</h2>
     <label for="lv">Variety last year</label><input id="lv" list="vl" value="${esc(ly.variety || "")}">
     <div class="row"><div><label for="ly">Yield</label><input id="ly" type="number" inputmode="decimal" min="0" step="any" value="${esc(ly.yield || "")}"></div><div><label for="lu">Unit</label><select id="lu">${YIELD_UNITS.map(u => `<option ${u === ly.yield_unit ? "selected" : ""}>${u}</option>`).join("")}</select></div></div>
     <label>Problems faced last year</label>${chips("ly", iss, ly.problems)}
+    ${pestBlock("Pest and disease attack last year", "pl", (p.pests || {}).last, PL)}
     <label for="ln">Anything else about last season? (optional)</label><input id="ln" value="${esc(ly.note || "")}">
     <label class="flag"><input type="checkbox" id="fl"> Share this year's problems with our expert now</label>
     <p class="err" id="e" role="alert"></p><button class="btn full" id="b">Save field profile</button></form>`);
@@ -332,7 +346,7 @@ function profileForm(id) {
       p_soil: { type: $("#st").value, condition: $("#sc").value, ph: $("#sp").value, ec: $("#se").value },
       p_water: { source: $("#ws").value, other: $("#ws").value === "Other" ? $("#wo").value.trim() : "", method: $("#wm").value, ph: $("#wp").value, ec: $("#we").value, tds: $("#wd").value },
       p_last_year: { variety: $("#lv").value.trim(), yield: $("#ly").value, yield_unit: $("#lu").value, problems: checked("ly"), note: $("#ln").value.trim() },
-      p_issues: issues, p_photo: photo });
+      p_issues: issues, p_pests: { this: pestVal("pt"), last: pestVal("pl") }, p_photo: photo });
     if (error) { $("#e").textContent = "Could not save. Try again."; $("#b").disabled = false; $("#b").textContent = "Save field profile"; return; }
     if ($("#fl").checked && issues.length) {
       await sb.rpc("hariyo_add_case", { p_token: TOKEN, p_plot: p.id, p_crop: c.slug, p_issue: issues.slice(0, 3).join(", ") + (issues.length > 3 ? " and more" : ""), p_severity: null, p_date: today(), p_problem: "Problems this year: " + issues.join("; "), p_photos: [] });
@@ -340,6 +354,15 @@ function profileForm(id) {
     await loadMe(); go(`#/field/${p.id}`);
   };
 }
+
+function pestBlock(title, key, cur, PL) {
+  cur = cur || {};
+  return `<h3 style="margin-top:14px">${esc(title)}</h3><label for="${key}lv">Overall attack</label><select id="${key}lv">${opts(LEVELS, cur.level)}</select>
+  <label>Pests</label>${chips(key + "p", PL.pests, cur.pests)}<label>Diseases</label>${chips(key + "d", PL.diseases, cur.diseases)}
+  <label for="${key}o">Other pest or disease (optional)</label><input id="${key}o" value="${esc(cur.other || "")}">`;
+}
+const pestVal = key => ({ level: $("#" + key + "lv").value, pests: checked(key + "p"), diseases: checked(key + "d"), other: $("#" + key + "o").value.trim() });
+const pestTxt = x => x && (x.level || (x.pests || []).length || (x.diseases || []).length || x.other) ? [x.level && x.level !== "None" ? x.level + " attack" : x.level === "None" ? "No attack" : "", ...(x.pests || []), ...(x.diseases || []), x.other].filter(Boolean).join(", ") : "";
 
 /* ---------- Crop status update: photo, how it looks, germination, tillers, height ---------- */
 function obsForm(id) {
@@ -397,29 +420,57 @@ function farm(q) {
   const pre = ed ? ed.crop : q.get("crop") || "";
   render(`<h1>My farm</h1><p class="muted">${esc(ME.farmer.village || "")}${ME.farmer.district ? ", " + esc(ME.farmer.district) : ""}</p>
   ${!ed ? plots.map(p => { const c = crop(p.crop); return `<div class="card plot"><a href="#/field/${p.id}" style="text-decoration:none;color:inherit"><h3>${esc(plotName(p))}</h3><div class="small muted">${esc(c ? c.name : p.crop)}${areaTxt(p) ? " · " + esc(areaTxt(p)) : ""}${p.start_date ? " · " + fmtDate(p.start_date) : ""}</div></a><span><a class="x" href="#/farm?edit=${p.id}">Edit</a> <button class="x" data-del="${p.id}">Remove</button></span></div>`; }).join("") : ""}
+  ${!ed ? accountCard() : ""}
   <form class="card" id="f"><h2>${ed ? "Edit field" : "Add a field"}</h2>
     <label for="fn">Field name</label><input id="fn" placeholder="Example: Well-side field, Survey 112" value="${esc(ed ? ed.name || "" : "")}">
     <label for="c">Crop</label><select id="c" ${ed ? "disabled" : ""}>${CROPS.map(c => `<option value="${c.slug}" ${c.slug === pre ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select>
     <div class="row"><div><label for="a">Area</label><input id="a" type="number" inputmode="decimal" min="0" step="any" value="${ed && ed.area ? +ed.area : ""}"></div>
-    <div><label for="u">Unit</label><select id="u">${Object.keys(UNITS).map(u => `<option value="${u}" ${ed && ed.unit === u ? "selected" : ""}>${UNITS[u]}</option>`).join("")}</select></div></div>
+    <div><label for="u">Unit</label><select id="u">${Object.keys(UNITS).map(u => `<option value="${u}" ${(ed ? ed.unit === u : (ME.farmer.vigha_guntha ? u === "vigha" : u === "acre")) ? "selected" : ""}>${UNITS[u]}</option>`).join("")}</select></div></div>
+    <div id="gw"><label for="g">Vigha size</label><select id="g">${vighaOpts(ed ? ed.vigha_guntha || ME.farmer.vigha_guntha : ME.farmer.vigha_guntha)}</select></div>
     <div id="dl"><label for="sd" id="sdl">Planting date</label><input id="sd" type="date" max="${today()}" value="${ed && ed.start_date ? ed.start_date : ""}"></div>
     <p class="err" id="e" role="alert"></p>
     <button class="btn full" id="b">${ed ? "Save changes" : "Save field"}</button>${ed ? `<p style="margin-top:10px"><a href="#/field/${ed.id}">Cancel</a></p>` : ""}</form>`);
-  const sync = () => { const c = crop($("#c").value); $("#dl").style.display = c.timing.mode === "days" ? "" : "none"; $("#sdl").textContent = c.timing.label || "Date"; };
-  $("#c").onchange = sync; sync();
+  const sync = () => { const c = crop($("#c").value); $("#dl").style.display = c.timing.mode === "days" ? "" : "none"; $("#sdl").textContent = c.timing.label || "Date"; $("#gw").style.display = $("#u").value === "vigha" ? "" : "none"; };
+  $("#c").onchange = sync; $("#u").onchange = sync; sync();
   $("#f").onsubmit = async ev => {
     ev.preventDefault(); const c = crop($("#c").value);
     if (c.timing.mode === "days" && !$("#sd").value) { $("#e").textContent = "Please choose the date."; return; }
+    if ($("#u").value === "vigha" && !$("#g").value) { $("#e").textContent = "Please choose your vigha size (24, 20, 16 or 13 guntha)."; return; }
     $("#b").disabled = true;
-    const args = { p_token: TOKEN, p_name: $("#fn").value, p_area: $("#a").value ? Number($("#a").value) : null, p_unit: $("#u").value, p_start: c.timing.mode === "days" ? $("#sd").value : null };
+    const args = { p_token: TOKEN, p_name: $("#fn").value, p_area: $("#a").value ? Number($("#a").value) : null, p_unit: $("#u").value, p_guntha: $("#u").value === "vigha" ? +$("#g").value : null, p_start: c.timing.mode === "days" ? $("#sd").value : null };
     const { data, error } = ed ? await sb.rpc("hariyo_update_plot", Object.assign(args, { p_id: ed.id })) : await sb.rpc("hariyo_add_plot", Object.assign(args, { p_crop: c.slug }));
     if (error) { $("#e").textContent = "Could not save. Try again."; $("#b").disabled = false; return; }
     await loadMe(); go(ed ? `#/field/${ed.id}` : `#/field/${data}`);
   };
+  if ($("#af")) bindAccount(q);
   document.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
     if (!confirm("Remove this field and its diary?")) return;
     await sb.rpc("hariyo_del_plot", { p_token: TOKEN, p_id: b.dataset.del }); await loadMe(); farm(q);
   });
+}
+
+/* ---------- Account: vigha size and delivery address ---------- */
+const ADDR = [["name", "Full name", "name"], ["phone", "Mobile number", "tel"], ["alt", "Alternate mobile (optional)", "tel"], ["line1", "House / plot / street", "address-line1"], ["line2", "Area / landmark", "address-line2"],
+  ["city", "Village / city", "address-level3"], ["taluka", "Taluka", ""], ["district", "District", "address-level2"], ["state", "State", "address-level1"], ["pin", "PIN code", "postal-code"]];
+const addrLine = a => a && a.line1 ? [a.name, a.line1, a.line2, a.city, a.taluka && "Ta. " + a.taluka, a.district && "Dist. " + a.district, a.state, a.pin && "PIN " + a.pin, a.phone && "Mobile " + a.phone].filter(Boolean).join(", ") : "";
+function accountCard() {
+  const f = ME.farmer, a = f.address || {};
+  const def = { name: f.name, phone: f.phone, city: f.village, district: f.district, state: f.state };
+  return `<details class="card" ${!a.line1 ? "" : ""}><summary><strong>Delivery address and vigha size</strong><div class="small muted">${a.line1 ? esc(addrLine(a)) : "Add your postal or courier address for product delivery."}${f.vigha_guntha ? ` · Vigha: ${f.vigha_guntha} guntha` : ""}</div></summary>
+  <form id="af"><label for="avg">Your vigha size</label><select id="avg">${vighaOpts(f.vigha_guntha)}</select>
+  ${ADDR.map(([k, l, ac]) => `<label for="a_${k}">${l}</label><input id="a_${k}" ${ac ? `autocomplete="${ac}"` : ""} ${k === "pin" ? 'inputmode="numeric" maxlength="6"' : ""} ${k === "phone" || k === "alt" ? 'type="tel" inputmode="numeric"' : ""} value="${esc(a[k] ?? def[k] ?? "")}">`).join("")}
+  <p class="err" id="ae" role="alert"></p><button class="btn full" id="ab">Save address</button></form></details>`;
+}
+function bindAccount(q) {
+  $("#af").onsubmit = async ev => {
+    ev.preventDefault(); const a = {}; ADDR.forEach(([k]) => a[k] = $("#a_" + k).value.trim());
+    if (a.pin && !/^\d{6}$/.test(a.pin)) { $("#ae").textContent = "PIN code must be 6 digits."; return; }
+    if (a.line1 && (!a.city || !a.district || !a.pin)) { $("#ae").textContent = "Please fill village/city, district and PIN code."; return; }
+    $("#ab").disabled = true;
+    const { error } = await sb.rpc("hariyo_save_account", { p_token: TOKEN, p_vigha: +$("#avg").value || null, p_address: a });
+    if (error) { $("#ae").textContent = "Could not save. Try again."; $("#ab").disabled = false; return; }
+    await loadMe(); farm(q);
+  };
 }
 
 /* ---------- Problem report: issue, severity, photos ---------- */
@@ -512,7 +563,7 @@ function product(c) {
   const p = c.product; if (!p || !p.name) return "";
   return `<div class="card prod">${IMG.has(p.slug) ? `<img src="/img/products/${p.slug}.webp" alt="${esc(p.name)} pack" loading="lazy">` : "<div></div>"}
   <div><h3>${esc(p.name)}</h3><p class="small muted">${esc(p.line)}</p>
-  <a class="btn tur" href="${wa(`Hi, I want to order ${p.name} for my ${c.name.toLowerCase()}. Please share price and delivery.`)}" target="_blank" rel="noopener">Order on WhatsApp</a></div></div>`;
+  <a class="btn tur" href="${wa(`Hi, I want to order ${p.name} for my ${c.name.toLowerCase()}. Please share price and delivery.${ME && ME.farmer.address && ME.farmer.address.line1 ? "\nDelivery address: " + addrLine(ME.farmer.address) : ""}`)}" target="_blank" rel="noopener">Order on WhatsApp</a></div></div>`;
 }
 function shop() {
   setTab("shop");

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hariyo admin</title><meta name="robots" content="noindex">
-<link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/app.css?v=4">
+<link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/app.css?v=5">
 <style>body{padding-bottom:20px}main{max-width:900px}.adtabs{display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap}.adtabs button{min-height:42px}.adtabs button.on{background:var(--leafd);color:#fff}
 table{width:100%;border-collapse:collapse;font-size:.95rem}td,th{padding:8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}.thumbs img{cursor:pointer}</style>
 </head>
@@ -18,6 +18,8 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt
 const dt = d => new Date(d).toLocaleString("en-IN", {day:"numeric", month:"short", hour:"numeric", minute:"2-digit"});
 const waTo = (phone, text) => `https://wa.me/91${phone}?text=${encodeURIComponent(text)}`;
 let tab = "cases";
+const pz = (x, l) => x && (x.level || (x.pests||[]).length || (x.diseases||[]).length || x.other) ? l + ": " + [x.level, ...(x.pests||[]), ...(x.diseases||[]), x.other].filter(Boolean).join(", ") : "";
+const addr = a => a && a.line1 ? [a.name, a.line1, a.line2, a.city, a.taluka && "Ta. " + a.taluka, a.district, a.state, a.pin, a.phone, a.alt].filter(Boolean).join(", ") : "";
 
 function login(msg) {
   V.innerHTML = `<form class="card" id="f" style="max-width:420px;margin:30px auto"><h1>Team sign in</h1><p class="muted small">Use the same team email as the CRM dashboard.</p>
@@ -44,7 +46,7 @@ async function show() { if (tab === "cases") return cases(); if (tab === "farmer
 
 async function cases() {
   V.innerHTML = nav() + `<p class="muted">Loading…</p>`; bindNav();
-  const { data } = await sb.from("hariyo_cases").select("*, hariyo_farmers(name,phone,village,district,state), hariyo_plots(name,area,unit,start_date,variety,plant_type,soil,water,last_year,issues,photo)").order("created_at", { ascending: false }).limit(200);
+  const { data } = await sb.from("hariyo_cases").select("*, hariyo_farmers(name,phone,village,district,state), hariyo_plots(name,area,unit,vigha_guntha,start_date,variety,plant_type,soil,water,last_year,issues,pests,photo)").order("created_at", { ascending: false }).limit(200);
   const rows = data || [];
   const urls = {};
   const all = rows.flatMap(r => r.photos || []);
@@ -52,7 +54,7 @@ async function cases() {
   V.innerHTML = nav() + `<p class="muted">${rows.filter(r => r.status === "new").length} waiting · ${rows.length} total</p>` + rows.map(r => { const f = r.hariyo_farmers || {}; return `<div class="card">
     <div class="plot"><h3>${esc(f.name)} · ${esc(r.crop)}${r.hariyo_plots ? " · " + esc(r.hariyo_plots.name || "") : ""}</h3><span class="tag ${r.status==="new"?"new":""}">${esc(r.status)}</span></div>
     <p><strong>${esc(r.issue || "")}</strong> ${r.severity ? `<span class="sev sev-${r.severity}">${esc(r.severity)}</span>` : ""} ${r.happened_on ? `<span class="small muted">since ${esc(r.happened_on)}</span>` : ""}</p>
-    ${r.hariyo_plots ? (() => { const q = r.hariyo_plots, sl = q.soil || {}, w = q.water || {}, ly = q.last_year || {}; return `<p class="small">${[q.variety && "Variety: " + q.variety, q.plant_type, q.start_date && "Planted " + q.start_date, q.area && q.area + " " + q.unit, sl.type && "Soil: " + [sl.type, sl.condition, sl.ph && "pH " + sl.ph, sl.ec && "EC " + sl.ec].filter(Boolean).join(", "), w.source && "Water: " + [w.source === "Other" ? w.other : w.source, w.method, w.ph && "pH " + w.ph, w.ec && "EC " + w.ec, w.tds && "TDS " + w.tds].filter(Boolean).join(", "), ly.yield && "Last year: " + ly.yield + " " + (ly.yield_unit || ""), (q.issues || []).length && "This year: " + q.issues.join(", "), (ly.problems || []).length && "Last year problems: " + ly.problems.join(", ")].filter(Boolean).map(esc).join(" · ")}</p>${q.photo ? `<img src="https://filbmvtclfcrrvxckema.supabase.co/storage/v1/object/public/hariyo-fields/${esc(q.photo)}" alt="Field photo" style="width:120px;height:90px;object-fit:cover;border-radius:8px">` : ""}`; })() : ""}
+    ${r.hariyo_plots ? (() => { const q = r.hariyo_plots, sl = q.soil || {}, w = q.water || {}, ly = q.last_year || {}; return `<p class="small">${[q.variety && "Variety: " + q.variety, q.plant_type, q.start_date && "Planted " + q.start_date, q.area && q.area + " " + q.unit, sl.type && "Soil: " + [sl.type, sl.condition, sl.ph && "pH " + sl.ph, sl.ec && "EC " + sl.ec].filter(Boolean).join(", "), w.source && "Water: " + [w.source === "Other" ? w.other : w.source, w.method, w.ph && "pH " + w.ph, w.ec && "EC " + w.ec, w.tds && "TDS " + w.tds].filter(Boolean).join(", "), ly.yield && "Last year: " + ly.yield + " " + (ly.yield_unit || ""), (q.issues || []).length && "This year: " + q.issues.join(", "), (ly.problems || []).length && "Last year problems: " + ly.problems.join(", "), pz((q.pests || {}).this, "Pests/diseases this year"), pz((q.pests || {}).last, "Pests/diseases last year")].filter(Boolean).map(esc).join(" · ")}</p>${q.photo ? `<img src="https://filbmvtclfcrrvxckema.supabase.co/storage/v1/object/public/hariyo-fields/${esc(q.photo)}" alt="Field photo" style="width:120px;height:90px;object-fit:cover;border-radius:8px">` : ""}`; })() : ""}
     <p class="small muted">${dt(r.created_at)} · ${esc(f.village||"")} ${esc(f.district||"")} ${esc(f.state||"")} · <a href="tel:${esc(f.phone)}">${esc(f.phone)}</a></p>
     <p>${esc(r.problem)}</p>
     <div class="thumbs">${(r.photos||[]).map(p => urls[p] ? `<a href="${urls[p]}" target="_blank" rel="noopener"><img src="${urls[p]}" alt="Crop photo"></a>` : "").join("")}</div>
@@ -69,12 +71,12 @@ async function cases() {
 
 async function farmers() {
   V.innerHTML = nav() + `<p class="muted">Loading…</p>`; bindNav();
-  const { data } = await sb.from("hariyo_farmers").select("name,phone,village,district,state,created_at,hariyo_plots(crop,name,area,unit,start_date), hariyo_activities(count)").order("created_at", { ascending: false }).limit(1000);
+  const { data } = await sb.from("hariyo_farmers").select("name,phone,village,district,state,vigha_guntha,address,created_at,hariyo_plots(crop,name,area,unit,vigha_guntha,start_date), hariyo_activities(count)").order("created_at", { ascending: false }).limit(1000);
   const rows = data || [];
   V.innerHTML = nav() + `<div class="row" style="margin-bottom:10px"><p class="muted">${rows.length} farmers</p><button class="btn alt" id="csv" style="flex:0 0 auto">Download CSV</button></div>
-  <div class="card" style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Phone</th><th>Place</th><th>Fields</th><th>Diary entries</th><th>Joined</th></tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r.name)}</td><td><a href="https://wa.me/91${esc(r.phone)}" target="_blank" rel="noopener">${esc(r.phone)}</a></td><td>${esc([r.village,r.district,r.state].filter(Boolean).join(", "))}</td><td>${esc((r.hariyo_plots||[]).map(p => (p.name ? p.name + ": " : "") + p.crop + (p.area ? ` (${p.area} ${p.unit})` : "")).join(", "))}</td><td>${r.hariyo_activities?.[0]?.count || 0}</td><td>${dt(r.created_at)}</td></tr>`).join("")}</tbody></table></div>`;
+  <div class="card" style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Phone</th><th>Place</th><th>Vigha</th><th>Fields</th><th>Diary entries</th><th>Delivery address</th><th>Joined</th></tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r.name)}</td><td><a href="https://wa.me/91${esc(r.phone)}" target="_blank" rel="noopener">${esc(r.phone)}</a></td><td>${esc([r.village,r.district,r.state].filter(Boolean).join(", "))}</td><td>${r.vigha_guntha ? r.vigha_guntha + " g" : ""}</td><td>${esc((r.hariyo_plots||[]).map(p => (p.name ? p.name + ": " : "") + p.crop + (p.area ? ` (${p.area} ${p.unit})` : "")).join(", "))}</td><td>${r.hariyo_activities?.[0]?.count || 0}</td><td class="small">${esc(addr(r.address))}</td><td>${dt(r.created_at)}</td></tr>`).join("")}</tbody></table></div>`;
   bindNav();
-  $("#csv").onclick = () => { const q = s => `"${String(s ?? "").replace(/"/g,'""')}"`; const csv = ["name,phone,village,district,state,crops,joined"].concat(rows.map(r => [r.name,r.phone,r.village,r.district,r.state,(r.hariyo_plots||[]).map(p=>p.crop).join(" "),r.created_at].map(q).join(","))).join("\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "hariyo-farmers.csv"; a.click(); };
+  $("#csv").onclick = () => { const q = s => `"${String(s ?? "").replace(/"/g,'""')}"`; const csv = ["name,phone,village,district,state,vigha_guntha,crops,address,joined"].concat(rows.map(r => [r.name,r.phone,r.village,r.district,r.state,r.vigha_guntha,(r.hariyo_plots||[]).map(p=>p.crop).join(" "),addr(r.address),r.created_at].map(q).join(","))).join("\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "hariyo-farmers.csv"; a.click(); };
 }
 
 async function events() {
