@@ -126,3 +126,4 @@ textarea{min-height:110px}
 form h2{margin-top:18px}
 details.card summary{cursor:pointer;list-style:none}details.card summary::-webkit-details-marker{display:none}
 details.card summary strong::after{content:" ›";color:var(--leaf)}details.card[open] summary strong::after{content:" ⌄"}
+.act-grid .wide{grid-column:1/-1}

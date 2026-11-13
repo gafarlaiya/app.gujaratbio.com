@@ -59,7 +59,8 @@ const wa = text => `https://wa.me/${WA}?text=${encodeURIComponent(text)}`;
 const fmtDate = d => new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 const today = () => new Date().toISOString().slice(0, 10);
 const plotById = id => ((ME && ME.plots) || []).find(p => p.id === id);
-const plotName = p => p.name || (crop(p.crop) || {}).name || p.crop;
+const plotName = p => p.farm ? p.farm + (p.block ? " · " + p.block : p.age_years ? ` · ${+p.age_years} yr trees` : "") : p.name || (crop(p.crop) || {}).name || p.crop;
+const treeTxt = p => [p.plants ? `${p.plants} plants` : "", p.age_years ? `${+p.age_years} yrs` : ""].filter(Boolean).join(" · ");
 const areaTxt = p => p.area ? `${+p.area} ${UNITS[p.unit] || p.unit}${p.unit === "vigha" && p.vigha_guntha ? ` (${p.vigha_guntha} g)` : ""}` : "";
 const acreTxt = p => { const a = acresOf(p); return a && p.unit !== "acre" ? `about ${Math.round(a * 100) / 100} acre` : ""; };
 const kind = k => KINDS.find(x => x.k === k) || KINDS[KINDS.length - 1];
@@ -85,9 +86,31 @@ const PESTS = {
            diseases: ["Powdery mildew", "Anthracnose", "Malformation", "Bacterial canker (black spot)", "Sooty mould", "Dieback", "Gummosis", "Stem-end rot", "Red rust"] } };
 const PESTS_ANY = { pests: ["Sucking pests (aphid, jassid, whitefly, thrips)", "Mites", "Borers", "Leaf-eating caterpillars", "Fruit fly", "Termites or white grub", "Nematodes"], diseases: ["Fungal leaf spots or blight", "Powdery or downy mildew", "Root rot or wilt", "Bacterial disease", "Viral disease (leaf curl, mosaic)"] };
 const LEVELS = ["None", "Low", "Medium", "High", "Severe"];
+/* Crop-aware questions: each crop shows its own problems, status fields, yield units and targets. */
+const TREE = ["mango", "citrus", "coconut", "pomegranate", "apple", "fruits", "tea"];
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const PUMPS = ["15 L knapsack pump", "20 L knapsack or battery pump", "200 L drum", "250 L tank", "500 L tank", "1000 L tank", "1500 L tank", "2000 L tank", "Other"];
+const ageGroup = a => a == null || a === "" ? "" : a <= 3 ? "Young (1 to 3 years)" : a <= 6 ? "Pre-bearing (4 to 6 years)" : a <= 15 ? "Bearing (7 to 15 years)" : a <= 30 ? "Mature (16 to 30 years)" : "Old (above 30 years)";
+const CFG = {
+  mango: {
+    issues: ["Poor flowering", "Flowers drying (blossom blight)", "Poor fruit set", "Heavy fruit drop", "Off year / alternate bearing", "Weak or late new flush", "Small fruit size", "Fruit cracking", "Spongy tissue", "Black tip", "Poor colour or taste", "Tree decline or dieback", "Weak trees attacked by pests and diseases", "Unfavourable weather (unseasonal rain, fog, heat)", "Needed more fertilizers", "Increased chemical dependency"],
+    obs: [["flowering", "Trees in flower", ["None", "Less than 25%", "25 to 50%", "50 to 75%", "75% or more"]], ["flush", "New leaf flush", ["None", "Light", "Medium", "Heavy"]],
+          ["fruitset", "Fruit set", ["Not yet", "Poor", "Average", "Good", "Heavy"]], ["fruitsize", "Fruit size", ["Pea", "Marble", "Lemon", "Egg", "Near mature"]], ["fruitdrop", "Fruit drop", ["None", "Low", "Medium", "High"]]],
+    yieldUnits: ["kg per tree", "tonnes per acre", "tonnes per vigha", "crates (20 kg) total", "tonnes total"],
+    lastExtra: [["bearing", "Last season was", ["On year (heavy crop)", "Normal", "Off year (light crop)"]], ["harvest", "Main harvest month", MONTHS], ["market", "Sold mainly to", ["APMC / local market", "Trader at the farm", "Exporter", "Processor (pulp)", "Direct to customers"]]],
+    targetExtra: [["fruits", "Target fruits per tree", null], ["grade", "Target quality", ["Export grade", "Premium table fruit", "Pulp / processing"]], ["harvest", "Target harvest month", MONTHS]],
+    spacing: ["Traditional (10 x 10 m)", "Medium density (7.5 x 7.5 m)", "High density (5 x 5 m)", "Ultra high density (3 x 2 m)", "Other"],
+    treeType: ["Grafted", "Seedling (deshi)"] },
+  sugarcane: {
+    yieldUnits: ["tonnes per acre", "tonnes per vigha", "tonnes total"],
+    lastExtra: [["recovery", "Sugar recovery (%)", null], ["harvest", "Harvest month", MONTHS], ["market", "Sold to", ["Sugar factory", "Jaggery (gur) unit", "Other"]]],
+    targetExtra: [["tillers", "Target millable canes per clump", null], ["harvest", "Target harvest month", MONTHS]] } };
+const cfg = slug => CFG[slug] || {};
+const isTree = slug => TREE.includes(slug);
 const acresOf = p => !p.area ? null : p.unit === "acre" ? +p.area : p.unit === "hectare" ? p.area * 2.471 : p.vigha_guntha ? p.area * p.vigha_guntha / 40 : null;
 const COUNT_LABEL = { sugarcane: "Average tillers per clump", paddy: "Average tillers per hill", cereals: "Average tillers per plant", banana: "Suckers per plant" };
 function issueList(slug) {
+  if (cfg(slug).issues) return cfg(slug).issues;
   if (slug === "sugarcane") return ["Poor germination", "Weak growth", "Less tillers", "Low stalk height", "Thin stalks", "Low stalk weight", "Dying of stalks", "Weak crop attacked by pests and diseases", "Unfavourable weather", "Needed more fertilizers", "Increased chemical dependency", "Low recovery / sugar"];
   const c = crop(slug) || { problems: [] };
   return [...new Set(["Poor germination or establishment", "Weak growth"].concat(c.problems, ["Weak crop attacked by pests and diseases", "Unfavourable weather", "Needed more fertilizers", "Increased chemical dependency", "Low yield"]))];
@@ -174,7 +197,7 @@ function tile(p) {
   const up = upcoming(p)[0];
   return `<a class="tile" href="#/field/${p.id}">
     <div class="tile-photo">${p.photo ? `<img src="${photoUrl(p.photo)}" alt="" loading="lazy">` : `<span>📷</span>`}</div><div class="tile-body">
-    <div class="tile-top"><span class="tile-name">${esc(plotName(p))}</span>${areaTxt(p) ? `<span class="tag">${esc(areaTxt(p))}</span>` : ""}</div>
+    <div class="tile-top"><span class="tile-name">${esc(plotName(p))}</span>${treeTxt(p) || areaTxt(p) ? `<span class="tag">${esc(treeTxt(p) || areaTxt(p))}</span>` : ""}</div>
     <div class="tile-crop">${esc(c.name)}</div>
     <div class="tile-age">${s.day != null ? `Day ${Math.max(s.day, 0)}` : new Date().toLocaleDateString("en-IN", { month: "long" })}</div>
     <div class="tile-stage">${st ? esc(st.name) : "Care all year"}${s.next ? `<span> · next: ${esc(c.stages[s.next.idx].name.split(" and ")[0])} in ${s.next.inDays} d</span>` : ""}</div>
@@ -190,7 +213,7 @@ function home() {
     <h2 style="margin-top:22px">Crop guides</h2>${cropGrid()}`);
     return;
   }
-  const plots = ME.plots || [];
+  const plots = [...(ME.plots || [])].sort((a, b) => (a.farm || a.name || "").localeCompare(b.farm || b.name || "") || (+a.age_years || 0) - (+b.age_years || 0));
   render(`${quote(0)}<p class="muted" style="margin:0 0 10px">Namaste, ${esc(ME.farmer.name.split(" ")[0])}</p>
   <div class="tiles">${plots.map(tile).join("")}<a class="tile add" href="#/farm"><span>+</span>Add a field</a></div>
   <a class="help-cta" href="#/help"><strong>${HELP}</strong><span>Send photos. Our crop team replies on WhatsApp.</span></a>
@@ -225,11 +248,11 @@ function field(id) {
     ${st ? `<div class="what"><p style="margin:0">${esc(st.text)}</p></div>` : ""}
     <div class="what next"><strong>Next action:</strong> ${esc(nextAction(p))}${s.next ? `<br><span class="small">Next stage, ${esc(c.stages[s.next.idx].name)}, in about ${s.next.inDays} days.</span>` : ""}</div>
   </section>
-  <div class="act-grid"><a class="btn" href="#/obs/${p.id}">📷 Update crop status</a><a class="btn" href="#/log/${p.id}">+ Add or plan a dose / work</a><a class="btn tur" href="#/help?field=${p.id}">⚠️ Report a problem</a><a class="btn alt" href="#/profile/${p.id}">Field profile</a></div>
+  <div class="act-grid"><a class="btn" href="#/obs/${p.id}">📷 Update crop status</a><a class="btn" href="#/log/${p.id}">+ Add or plan a dose / work</a><a class="btn tur" href="#/help?field=${p.id}">⚠️ Report a problem</a><a class="btn alt" href="#/profile/${p.id}">Field profile</a>${isTree(c.slug) ? `<a class="btn alt wide" href="#/farm?crop=${c.slug}&farm=${encodeURIComponent(p.farm || plotName(p))}">+ Add another age group to this farm</a>` : ""}</div>
   ${ups.length ? `<div class="card"><h2>Coming up</h2><ul class="diary">${ups.map(a => `<li class="ev up"><span class="ev-i">${kind(a.kind).icon}</span><div><div class="ev-d">${fmtDate(a.happened_on)} · planned</div><strong>${esc(kind(a.kind).l)}</strong>${a.product ? `<div>${esc(a.product)}</div>` : ""}<button class="x" data-delact="${a.id}">Delete</button></div></li>`).join("")}</ul></div>` : ""}
   ${lo ? `<div class="card"><h2>Crop status on ${fmtDate(lo.observed_on)}</h2>${obsFacts(lo, c)}</div>` : ""}
   <div class="card"><div class="plot"><h2>Field profile</h2><a class="x" href="#/profile/${p.id}">Edit</a></div>
-    <dl class="facts">${[["Variety", p.variety], ["Planting", p.plant_type], ["Soil", [sl.type, sl.condition].filter(Boolean).join(", ")], ["Soil pH", sl.ph], ["Soil EC", sl.ec], ["Water", [wt.source === "Other" ? wt.other : wt.source, wt.method].filter(Boolean).join(", ")], ["Water pH / EC / TDS", [wt.ph, wt.ec, wt.tds].some(Boolean) ? [wt.ph || "-", wt.ec || "-", wt.tds || "-"].join(" / ") : ""], ["Area", acreTxt(p) ? areaTxt(p) + ", " + acreTxt(p) : ""], ["Pests and diseases this year", pestTxt((p.pests || {}).this)], ["Pests and diseases last year", pestTxt((p.pests || {}).last)]].filter(x => x[1]).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("") || `<dd class="muted">Add soil, water and variety details so our expert can advise better.</dd>`}</dl>
+    <dl class="facts">${[["Plants", treeTxt(p) ? treeTxt(p) + (p.age_years ? ", " + ageGroup(+p.age_years) : "") : ""], ["Tree type / spacing", [(p.details || {}).tree_type, (p.details || {}).spacing === "Other" ? (p.details || {}).spacing_other : (p.details || {}).spacing].filter(Boolean).join(", ")], ["Spray pump", (p.details || {}).pump === "Other" ? (p.details || {}).pump_other : (p.details || {}).pump], ["Variety", p.variety], ["Planting", p.plant_type], ["Soil", [sl.type, sl.condition].filter(Boolean).join(", ")], ["Soil pH", sl.ph], ["Soil EC", sl.ec], ["Water", [wt.source === "Other" ? wt.other : wt.source, wt.method].filter(Boolean).join(", ")], ["Water pH / EC / TDS", [wt.ph, wt.ec, wt.tds].some(Boolean) ? [wt.ph || "-", wt.ec || "-", wt.tds || "-"].join(" / ") : ""], ["Area", acreTxt(p) ? areaTxt(p) + ", " + acreTxt(p) : ""], ["Pests and diseases this year", pestTxt((p.pests || {}).this)], ["Pests and diseases last year", pestTxt((p.pests || {}).last)], ["Target", targetTxt(p, c)]].filter(x => x[1]).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("") || `<dd class="muted">Add soil, water and variety details so our expert can advise better.</dd>`}</dl>
     ${(p.issues || []).length ? `<h3>Problems this year</h3><p>${p.issues.map(x => `<span class="tag new">${esc(x)}</span>`).join(" ")}</p>` : ""}
     ${ly.yield || (ly.problems || []).length ? `<h3>Last year</h3><p class="small">${ly.variety ? esc(ly.variety) + " · " : ""}${ly.yield ? esc(ly.yield + " " + (ly.yield_unit || "")) : ""}</p>${(ly.problems || []).length ? `<p>${ly.problems.map(x => `<span class="tag">${esc(x)}</span>`).join(" ")}</p>` : ""}` : ""}</div>
   <h2>Field diary</h2>
@@ -255,7 +278,8 @@ function diaryAct(a, fertOrder) {
     <button class="x" data-delact="${a.id}">Delete</button></div></li>`;
 }
 function obsFacts(o, c) {
-  const f = [["Crop looks", o.look], ["Germination", o.germination], [COUNT_LABEL[c.slug] || "Average shoots or branches per plant", o.count_band], ["Average height", o.height ? `${+o.height} ${o.height_unit || ""}` : ""]].filter(x => x[1]);
+  const ex = (cfg(c.slug).obs || []).map(([k, l]) => [l, (o.data || {})[k]]);
+  const f = [["Crop looks", o.look], ...ex, ["Germination", o.germination], [COUNT_LABEL[c.slug] || "Average shoots or branches per plant", o.count_band], ["Average height", o.height ? `${+o.height} ${o.height_unit || ""}` : ""]].filter(x => x[1]);
   return `${o.photo ? `<img class="obs-photo" src="${photoUrl(o.photo)}" alt="Crop photo" loading="lazy">` : ""}<dl class="facts">${f.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>${o.note ? `<p class="small">${esc(o.note)}</p>` : ""}`;
 }
 function diaryObs(o, c) {
@@ -283,7 +307,7 @@ function logForm(id) {
       <label for="pr">Fertilizer or product name</label><input id="pr" list="pl" placeholder="Type or choose"><datalist id="pl">${prods.map(x => `<option value="${esc(x)}">`).join("")}</datalist>
       <div class="row"><div><label for="q">Quantity</label><input id="q" type="number" inputmode="decimal" min="0" step="any"></div>
       <div><label for="qu">Unit</label><select id="qu"><option>kg</option><option>g</option><option>bags</option><option>L</option><option>ml</option></select></div></div>
-      <label for="pu">Quantity is</label><select id="pu"><option value="${p.unit === "vigha" ? "vigha" : "acre"}">per ${p.unit === "vigha" ? `vigha${p.vigha_guntha ? ` (${p.vigha_guntha} guntha)` : ""}` : "acre"}</option><option value="${p.unit === "vigha" ? "acre" : "vigha"}">per ${p.unit === "vigha" ? "acre" : "vigha"}</option><option value="plant">per plant / tree</option><option value="total">total for this field</option></select>
+      <label for="pu">Quantity is</label><select id="pu">${perOpts(p, c)}</select>
       <label for="m">How did you apply it?</label><select id="m"><option value="">Choose</option>${METHODS.map(m => `<option>${esc(m)}</option>`).join("")}</select>
     </div>
     <label for="nt">Note (optional)</label><input id="nt" placeholder="Example: mixed with irrigation water">
@@ -302,19 +326,33 @@ function logForm(id) {
   };
 }
 
+function perOpts(p, c) {
+  const d = p.details || {}, pump = d.pump === "Other" ? d.pump_other : d.pump;
+  const area = [[p.unit === "vigha" ? "vigha" : "acre", `per ${p.unit === "vigha" ? `vigha${p.vigha_guntha ? ` (${p.vigha_guntha} guntha)` : ""}` : "acre"}`], [p.unit === "vigha" ? "acre" : "vigha", `per ${p.unit === "vigha" ? "acre" : "vigha"}`]];
+  const tree = [["tree", isTree(c.slug) ? "per tree" : "per plant"]], pmp = pump ? [["pump", `per pump / tank (${pump})`]] : [], tot = [["total", "total for this field"]];
+  return (isTree(c.slug) ? tree.concat(pmp, area, tot) : area.concat(pmp, tree, tot)).map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join("");
+}
+const targetTxt = (p, c) => { const t = p.target || {}; return [t.yield ? `${t.yield} ${t.yield_unit || ""}` : "", ...(cfg(c.slug).targetExtra || []).map(([k, l]) => t[k] ? `${l.replace("Target ", "")}: ${t[k]}` : ""), t.note].filter(Boolean).join(" · "); };
+const yieldUnits = slug => cfg(slug).yieldUnits || YIELD_UNITS;
+const extraFields = (list, cur, pre) => (list || []).map(([k, l, o]) => `<label for="${pre}${k}">${esc(l)}</label>${o ? `<select id="${pre}${k}">${opts(o, (cur || {})[k])}</select>` : `<input id="${pre}${k}" inputmode="decimal" value="${esc((cur || {})[k] || "")}">`}`).join("");
+const extraVals = (list, pre) => Object.fromEntries((list || []).map(([k]) => [k, $("#" + pre + k).value.trim()]));
+
 /* ---------- Field profile: photo, variety, soil, water, this year and last year ---------- */
 function profileForm(id) {
   setTab("home");
   if (!needMe(location.hash)) return;
   const p = plotById(id); if (!p) return home();
   const c = crop(p.crop), sl = p.soil || {}, wt = p.water || {}, ly = p.last_year || {}, iss = issueList(c.slug), PL = PESTS[c.slug] || PESTS_ANY;
-  render(`<p><a href="#/field/${p.id}">← ${esc(plotName(p))}</a></p><h1>Field profile</h1><p class="muted">${esc(plotName(p))} · ${esc(c.name)}. The more you fill in, the better our expert can advise.</p>
+  render(`<p><a href="#/field/${p.id}">← ${esc(plotName(p))}</a></p><h1>${isTree(c.slug) ? "Orchard profile" : "Field profile"}</h1><p class="muted">${esc(plotName(p))} · ${esc(c.name)}. The more you fill in, the better our expert can advise.</p>
   <form class="card" id="f">
     <h2>Field photo</h2>
     <div class="row"><label class="btn alt pick">📷 Take photo<input id="cam" type="file" accept="image/*" capture="environment" hidden></label><label class="btn alt pick">🖼️ From gallery<input id="gal" type="file" accept="image/*" hidden></label></div>
     <div class="thumbs" id="th">${p.photo ? `<img src="${photoUrl(p.photo)}" alt="Current field photo">` : ""}</div>
     <h2>Crop</h2>
     <label for="va">Variety</label><input id="va" list="vl" value="${esc(p.variety || "")}" placeholder="Type or choose"><datalist id="vl">${(VARIETIES[c.slug] || []).map(v => `<option value="${esc(v)}">`).join("")}</datalist>
+    ${cfg(c.slug).treeType ? `<div class="row"><div><label for="tt">Tree type</label><select id="tt">${opts(cfg(c.slug).treeType, (p.details || {}).tree_type)}</select></div><div><label for="spc">Spacing</label><select id="spc">${opts(cfg(c.slug).spacing, (p.details || {}).spacing)}</select></div></div><div id="spow"><label for="spo">Spacing (please specify)</label><input id="spo" value="${esc((p.details || {}).spacing_other || "")}"></div>` : ""}
+    <label for="pm">Spray pump used</label><select id="pm">${opts(PUMPS, (p.details || {}).pump)}</select>
+    <div id="pmow"><label for="pmo">Pump (please specify)</label><input id="pmo" value="${esc((p.details || {}).pump_other || "")}"></div>
     ${RATOON.includes(c.slug) ? `<label for="pt">Planting type</label><select id="pt">${opts(["New planting (Ropan)", "Ratoon (Lam) 1st", "Ratoon (Lam) 2nd", "Ratoon (Lam) 3rd or more"], p.plant_type)}</select>` : ""}
     <h2>Soil</h2>
     <div class="row"><div><label for="st">Soil type</label><select id="st">${opts(SOIL_TYPES, sl.type)}</select></div><div><label for="sc">Soil condition</label><select id="sc">${opts(SOIL_COND, sl.condition)}</select></div></div>
@@ -327,14 +365,19 @@ function profileForm(id) {
     ${pestBlock("Pest and disease attack this year", "pt", (p.pests || {}).this, PL)}
     <h2>Last year</h2>
     <label for="lv">Variety last year</label><input id="lv" list="vl" value="${esc(ly.variety || "")}">
-    <div class="row"><div><label for="ly">Yield</label><input id="ly" type="number" inputmode="decimal" min="0" step="any" value="${esc(ly.yield || "")}"></div><div><label for="lu">Unit</label><select id="lu">${YIELD_UNITS.map(u => `<option ${u === ly.yield_unit ? "selected" : ""}>${u}</option>`).join("")}</select></div></div>
+    <div class="row"><div><label for="ly">Yield</label><input id="ly" type="number" inputmode="decimal" min="0" step="any" value="${esc(ly.yield || "")}"></div><div><label for="lu">Unit</label><select id="lu">${yieldUnits(c.slug).map(u => `<option ${u === ly.yield_unit ? "selected" : ""}>${u}</option>`).join("")}</select></div></div>
+    ${extraFields(cfg(c.slug).lastExtra, ly, "lx_")}
     <label>Problems faced last year</label>${chips("ly", iss, ly.problems)}
     ${pestBlock("Pest and disease attack last year", "pl", (p.pests || {}).last, PL)}
     <label for="ln">Anything else about last season? (optional)</label><input id="ln" value="${esc(ly.note || "")}">
+    <h2>Targets for this season</h2>
+    <div class="row"><div><label for="ty">Target yield</label><input id="ty" type="number" inputmode="decimal" min="0" step="any" value="${esc((p.target || {}).yield || "")}"></div><div><label for="tu">Unit</label><select id="tu">${yieldUnits(c.slug).map(u => `<option ${u === (p.target || {}).yield_unit ? "selected" : ""}>${u}</option>`).join("")}</select></div></div>
+    ${extraFields(cfg(c.slug).targetExtra, p.target, "tx_")}
+    <label for="tn">Other goals (optional)</label><input id="tn" value="${esc((p.target || {}).note || "")}" placeholder="Example: less chemical spray, bigger fruit">
     <label class="flag"><input type="checkbox" id="fl"> Share this year's problems with our expert now</label>
     <p class="err" id="e" role="alert"></p><button class="btn full" id="b">Save field profile</button></form>`);
-  const syncW = () => { $("#wow").style.display = $("#ws").value === "Other" ? "" : "none"; };
-  $("#ws").onchange = syncW; syncW();
+  const syncW = () => { $("#wow").style.display = $("#ws").value === "Other" ? "" : "none"; $("#pmow").style.display = $("#pm").value === "Other" ? "" : "none"; if ($("#spow")) $("#spow").style.display = $("#spc").value === "Other" ? "" : "none"; };
+  $("#ws").onchange = syncW; $("#pm").onchange = syncW; if ($("#spc")) $("#spc").onchange = syncW; syncW();
   let file = null;
   const pick = e => { file = e.target.files[0] || file; if (file) $("#th").innerHTML = `<img src="${URL.createObjectURL(file)}" alt="New field photo">`; };
   $("#cam").onchange = pick; $("#gal").onchange = pick;
@@ -345,8 +388,10 @@ function profileForm(id) {
     const { error } = await sb.rpc("hariyo_save_profile", { p_token: TOKEN, p_id: p.id, p_variety: $("#va").value, p_plant_type: $("#pt") ? $("#pt").value : null,
       p_soil: { type: $("#st").value, condition: $("#sc").value, ph: $("#sp").value, ec: $("#se").value },
       p_water: { source: $("#ws").value, other: $("#ws").value === "Other" ? $("#wo").value.trim() : "", method: $("#wm").value, ph: $("#wp").value, ec: $("#we").value, tds: $("#wd").value },
-      p_last_year: { variety: $("#lv").value.trim(), yield: $("#ly").value, yield_unit: $("#lu").value, problems: checked("ly"), note: $("#ln").value.trim() },
-      p_issues: issues, p_pests: { this: pestVal("pt"), last: pestVal("pl") }, p_photo: photo });
+      p_last_year: Object.assign({ variety: $("#lv").value.trim(), yield: $("#ly").value, yield_unit: $("#lu").value, problems: checked("ly"), note: $("#ln").value.trim() }, extraVals(cfg(c.slug).lastExtra, "lx_")),
+      p_issues: issues, p_pests: { this: pestVal("pt"), last: pestVal("pl") },
+      p_details: { tree_type: $("#tt") ? $("#tt").value : "", spacing: $("#spc") ? $("#spc").value : "", spacing_other: $("#spo") ? $("#spo").value.trim() : "", pump: $("#pm").value, pump_other: $("#pm").value === "Other" ? $("#pmo").value.trim() : "" },
+      p_target: Object.assign({ yield: $("#ty").value, yield_unit: $("#tu").value, note: $("#tn").value.trim() }, extraVals(cfg(c.slug).targetExtra, "tx_")), p_photo: photo });
     if (error) { $("#e").textContent = "Could not save. Try again."; $("#b").disabled = false; $("#b").textContent = "Save field profile"; return; }
     if ($("#fl").checked && issues.length) {
       await sb.rpc("hariyo_add_case", { p_token: TOKEN, p_plot: p.id, p_crop: c.slug, p_issue: issues.slice(0, 3).join(", ") + (issues.length > 3 ? " and more" : ""), p_severity: null, p_date: today(), p_problem: "Problems this year: " + issues.join("; "), p_photos: [] });
@@ -378,9 +423,9 @@ function obsForm(id) {
     <label class="flag"><input type="checkbox" id="sp" checked> Use this photo as the field picture</label>
     <label for="dt">Date</label><input id="dt" type="date" value="${today()}" max="${today()}">
     <label>How does the crop look?</label><div class="sevs">${LOOKS.map((l, i) => `<label class="sev-opt"><input type="radio" name="lk" value="${l}" ${i === 1 ? "checked" : ""}><span class="sev look-${i}">${l}</span></label>`).join("")}</div>
-    ${sown ? `<label for="gm">Germination</label><select id="gm">${opts(GERM)}</select>` : ""}
-    <label for="cb">${esc(COUNT_LABEL[c.slug] || "Average shoots or branches per plant")}</label><select id="cb">${opts(COUNT)}</select>
-    <div class="row"><div><label for="ht">Average height</label><input id="ht" type="number" inputmode="decimal" min="0" step="any"></div><div><label for="hu">Unit</label><select id="hu"><option>feet</option><option>inches</option><option>cm</option></select></div></div>
+    ${cfg(c.slug).obs ? cfg(c.slug).obs.map(([k, l, o]) => `<label for="ob_${k}">${esc(l)}</label><select id="ob_${k}">${opts(o)}</select>`).join("") : `${sown ? `<label for="gm">Germination</label><select id="gm">${opts(GERM)}</select>` : ""}
+    <label for="cb">${esc(COUNT_LABEL[c.slug] || "Average shoots or branches per plant")}</label><select id="cb">${opts(COUNT)}</select>`}
+    <div class="row"><div><label for="ht">Average ${isTree(c.slug) ? "tree " : ""}height</label><input id="ht" type="number" inputmode="decimal" min="0" step="any"></div><div><label for="hu">Unit</label><select id="hu"><option>feet</option><option>inches</option><option>cm</option></select></div></div>
     <label for="nt">Note (optional)</label><input id="nt" placeholder="Example: lower leaves yellowing in one corner">
     <p class="err" id="e" role="alert"></p><button class="btn full" id="b">Save status</button></form>`);
   let file = null;
@@ -390,8 +435,9 @@ function obsForm(id) {
     ev.preventDefault(); $("#b").disabled = true; $("#b").textContent = "Saving…";
     let photo = null; if (file) { try { photo = await uploadFieldPhoto(file); } catch (e) {} }
     const { error } = await sb.rpc("hariyo_add_obs", { p_token: TOKEN, p_plot: p.id, p_date: $("#dt").value || today(), p_photo: photo,
-      p_look: (document.querySelector("[name=lk]:checked") || {}).value || null, p_germ: $("#gm") ? $("#gm").value || null : null, p_count: $("#cb").value || null,
-      p_height: $("#ht").value ? Number($("#ht").value) : null, p_hunit: $("#hu").value, p_note: $("#nt").value.trim() || null, p_set_photo: $("#sp").checked });
+      p_look: (document.querySelector("[name=lk]:checked") || {}).value || null, p_germ: $("#gm") ? $("#gm").value || null : null, p_count: $("#cb") ? $("#cb").value || null : null,
+      p_height: $("#ht").value ? Number($("#ht").value) : null, p_hunit: $("#hu").value, p_note: $("#nt").value.trim() || null, p_set_photo: $("#sp").checked,
+      p_data: Object.fromEntries((cfg(c.slug).obs || []).map(([k]) => [k, $("#ob_" + k).value]).filter(x => x[1])) });
     if (error) { $("#e").textContent = "Could not save. Try again."; $("#b").disabled = false; $("#b").textContent = "Save status"; return; }
     await loadMe(); go(`#/field/${p.id}`);
   };
@@ -417,30 +463,44 @@ function farm(q) {
   setTab("farm");
   if (!needMe("#/farm")) return;
   const plots = ME.plots || [], ed = plotById(q.get("edit"));
+  const fm = !ed && q.get("farm") ? q.get("farm") : "";
   const pre = ed ? ed.crop : q.get("crop") || "";
   render(`<h1>My farm</h1><p class="muted">${esc(ME.farmer.village || "")}${ME.farmer.district ? ", " + esc(ME.farmer.district) : ""}</p>
-  ${!ed ? plots.map(p => { const c = crop(p.crop); return `<div class="card plot"><a href="#/field/${p.id}" style="text-decoration:none;color:inherit"><h3>${esc(plotName(p))}</h3><div class="small muted">${esc(c ? c.name : p.crop)}${areaTxt(p) ? " · " + esc(areaTxt(p)) : ""}${p.start_date ? " · " + fmtDate(p.start_date) : ""}</div></a><span><a class="x" href="#/farm?edit=${p.id}">Edit</a> <button class="x" data-del="${p.id}">Remove</button></span></div>`; }).join("") : ""}
+  ${!ed ? plots.map(p => { const c = crop(p.crop); return `<div class="card plot"><a href="#/field/${p.id}" style="text-decoration:none;color:inherit"><h3>${esc(plotName(p))}</h3><div class="small muted">${esc(c ? c.name : p.crop)}${treeTxt(p) ? " · " + esc(treeTxt(p)) : ""}${areaTxt(p) ? " · " + esc(areaTxt(p)) : ""}${p.start_date ? " · " + fmtDate(p.start_date) : ""}</div></a><span><a class="x" href="#/farm?edit=${p.id}">Edit</a> <button class="x" data-del="${p.id}">Remove</button></span></div>`; }).join("") : ""}
   ${!ed ? accountCard() : ""}
-  <form class="card" id="f"><h2>${ed ? "Edit field" : "Add a field"}</h2>
-    <label for="fn">Field name</label><input id="fn" placeholder="Example: Well-side field, Survey 112" value="${esc(ed ? ed.name || "" : "")}">
-    <label for="c">Crop</label><select id="c" ${ed ? "disabled" : ""}>${CROPS.map(c => `<option value="${c.slug}" ${c.slug === pre ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select>
-    <div class="row"><div><label for="a">Area</label><input id="a" type="number" inputmode="decimal" min="0" step="any" value="${ed && ed.area ? +ed.area : ""}"></div>
+  <form class="card" id="f"><h2>${ed ? "Edit field" : fm ? "Add an age group to " + esc(fm) : "Add a field or orchard"}</h2>
+    <label for="c">Crop</label><select id="c" ${ed || fm ? "disabled" : ""}>${CROPS.map(c => `<option value="${c.slug}" ${c.slug === pre ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select>
+    <div id="tw">
+      <label for="fm">Farm / orchard name</label><input id="fm" placeholder="Example: Kesar wadi, Survey 45" value="${esc(ed ? ed.farm || ed.name || "" : fm || "")}">
+      <div class="row"><div><label for="np">Number of plants</label><input id="np" type="number" inputmode="numeric" min="1" step="1" value="${ed && ed.plants ? ed.plants : ""}"></div>
+      <div><label for="ag">Age of plants (years)</label><input id="ag" type="number" inputmode="decimal" min="0" step="any" value="${ed && ed.age_years ? +ed.age_years : ""}"></div></div>
+      <p class="small muted" id="agl" style="margin:4px 0 0"></p>
+      <label for="bk">Block or age group name (optional)</label><input id="bk" placeholder="Example: Old trees near well, New planting 2022" value="${esc(ed ? ed.block || "" : "")}">
+      <p class="small muted" style="margin:4px 0 0">Different ages need different care. Add each age group as its own block; they stay together under the same farm.</p>
+    </div>
+    <div id="fw"><label for="fn">Field name</label><input id="fn" placeholder="Example: Well-side field, Survey 112" value="${esc(ed ? ed.name || "" : "")}"></div>
+    <div class="row"><div><label for="a">Area <span class="muted small" id="ao"></span></label><input id="a" type="number" inputmode="decimal" min="0" step="any" value="${ed && ed.area ? +ed.area : ""}"></div>
     <div><label for="u">Unit</label><select id="u">${Object.keys(UNITS).map(u => `<option value="${u}" ${(ed ? ed.unit === u : (ME.farmer.vigha_guntha ? u === "vigha" : u === "acre")) ? "selected" : ""}>${UNITS[u]}</option>`).join("")}</select></div></div>
     <div id="gw"><label for="g">Vigha size</label><select id="g">${vighaOpts(ed ? ed.vigha_guntha || ME.farmer.vigha_guntha : ME.farmer.vigha_guntha)}</select></div>
     <div id="dl"><label for="sd" id="sdl">Planting date</label><input id="sd" type="date" max="${today()}" value="${ed && ed.start_date ? ed.start_date : ""}"></div>
     <p class="err" id="e" role="alert"></p>
-    <button class="btn full" id="b">${ed ? "Save changes" : "Save field"}</button>${ed ? `<p style="margin-top:10px"><a href="#/field/${ed.id}">Cancel</a></p>` : ""}</form>`);
-  const sync = () => { const c = crop($("#c").value); $("#dl").style.display = c.timing.mode === "days" ? "" : "none"; $("#sdl").textContent = c.timing.label || "Date"; $("#gw").style.display = $("#u").value === "vigha" ? "" : "none"; };
-  $("#c").onchange = sync; $("#u").onchange = sync; sync();
+    <button class="btn full" id="b">${ed ? "Save changes" : "Save"}</button>${ed ? `<p style="margin-top:10px"><a href="#/field/${ed.id}">Cancel</a></p>` : ""}</form>`);
+  const sync = () => { const c = crop($("#c").value), t = isTree(c.slug);
+    $("#dl").style.display = c.timing.mode === "days" ? "" : "none"; $("#sdl").textContent = c.timing.label || "Date";
+    $("#gw").style.display = $("#u").value === "vigha" ? "" : "none"; $("#tw").style.display = t ? "" : "none"; $("#fw").style.display = t ? "none" : "";
+    $("#ao").textContent = t ? "(optional)" : ""; $("#agl").textContent = $("#ag").value ? ageGroup(+$("#ag").value) : ""; };
+  $("#c").onchange = sync; $("#u").onchange = sync; $("#ag").oninput = sync; sync();
   $("#f").onsubmit = async ev => {
-    ev.preventDefault(); const c = crop($("#c").value);
+    ev.preventDefault(); const c = crop($("#c").value), t = isTree(c.slug);
     if (c.timing.mode === "days" && !$("#sd").value) { $("#e").textContent = "Please choose the date."; return; }
-    if ($("#u").value === "vigha" && !$("#g").value) { $("#e").textContent = "Please choose your vigha size (24, 20, 16 or 13 guntha)."; return; }
+    if (t && (!$("#fm").value.trim() || !$("#np").value || !$("#ag").value)) { $("#e").textContent = "Please fill farm name, number of plants and age of plants."; return; }
+    if ($("#a").value && $("#u").value === "vigha" && !$("#g").value) { $("#e").textContent = "Please choose your vigha size (24, 20, 16 or 13 guntha)."; return; }
     $("#b").disabled = true;
-    const args = { p_token: TOKEN, p_name: $("#fn").value, p_area: $("#a").value ? Number($("#a").value) : null, p_unit: $("#u").value, p_guntha: $("#u").value === "vigha" ? +$("#g").value : null, p_start: c.timing.mode === "days" ? $("#sd").value : null };
-    const { data, error } = ed ? await sb.rpc("hariyo_update_plot", Object.assign(args, { p_id: ed.id })) : await sb.rpc("hariyo_add_plot", Object.assign(args, { p_crop: c.slug }));
+    const f = { area: $("#a").value, unit: $("#u").value, guntha: $("#u").value === "vigha" ? $("#g").value : "", start: c.timing.mode === "days" ? $("#sd").value : "" };
+    if (t) Object.assign(f, { farm: $("#fm").value, block: $("#bk").value, plants: $("#np").value, age: $("#ag").value }); else f.name = $("#fn").value;
+    const { data, error } = await sb.rpc("hariyo_save_plot", { p_token: TOKEN, p_id: ed ? ed.id : null, p_crop: c.slug, p_f: f });
     if (error) { $("#e").textContent = "Could not save. Try again."; $("#b").disabled = false; return; }
-    await loadMe(); go(ed ? `#/field/${ed.id}` : `#/field/${data}`);
+    await loadMe(); go(`#/field/${data}`);
   };
   if ($("#af")) bindAccount(q);
   document.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
