@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hariyo admin</title><meta name="robots" content="noindex">
+<link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/app.css?v=1">
+<style>body{padding-bottom:20px}main{max-width:900px}.adtabs{display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap}.adtabs button{min-height:42px}.adtabs button.on{background:var(--leafd);color:#fff}
+table{width:100%;border-collapse:collapse;font-size:.95rem}td,th{padding:8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}.thumbs img{cursor:pointer}</style>
+</head>
+<body>
+<header class="top"><span class="brand"><img src="/icon-192.png" alt="" width="34" height="34"><span>Hariyo admin</span></span><button class="x" id="out" style="color:#fff;display:none">Sign out</button></header>
+<main id="v"><p class="muted">Loading…</p></main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+const sb = window.supabase.createClient("https://filbmvtclfcrrvxckema.supabase.co", "sb_publishable_qbndsVEhemxGLYZa6P3PyQ_iDNmsmmT");
+const $ = s => document.querySelector(s), V = $("#v");
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const dt = d => new Date(d).toLocaleString("en-IN", {day:"numeric", month:"short", hour:"numeric", minute:"2-digit"});
+const waTo = (phone, text) => `https://wa.me/91${phone}?text=${encodeURIComponent(text)}`;
+let tab = "cases";
+
+function login(msg) {
+  V.innerHTML = `<form class="card" id="f" style="max-width:420px;margin:30px auto"><h1>Team sign in</h1><p class="muted small">Use the same team email as the CRM dashboard.</p>
+  <label for="em">Email</label><input id="em" type="email" required autocomplete="email">
+  <label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password">
+  <p class="err" id="e">${esc(msg || "")}</p>
+  <button class="btn full">Sign in</button>
+  <button type="button" class="btn alt full" id="ml" style="margin-top:8px">Email me a sign-in link instead</button></form>`;
+  $("#f").onsubmit = async e => { e.preventDefault(); const { error } = await sb.auth.signInWithPassword({ email: $("#em").value, password: $("#pw").value }); if (error) $("#e").textContent = error.message; else boot(); };
+  $("#ml").onclick = async () => { const { error } = await sb.auth.signInWithOtp({ email: $("#em").value, options: { emailRedirectTo: location.origin + "/admin.html", shouldCreateUser: false } }); $("#e").textContent = error ? error.message : "Check your email for the sign-in link."; };
+}
+
+async function boot() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) return login();
+  $("#out").style.display = ""; $("#out").onclick = async () => { await sb.auth.signOut(); location.reload(); };
+  const { error } = await sb.from("hariyo_farmers").select("id", { head: true, count: "exact" });
+  if (error) return login("This email is not on the team list.");
+  show();
+}
+function nav() { return `<div class="adtabs">${[["cases","Problem reports"],["farmers","Farmers"],["events","Meetings"]].map(([k,l]) => `<button class="btn ${tab===k?"on":"alt"}" data-t="${k}">${l}</button>`).join("")}</div>`; }
+function bindNav() { document.querySelectorAll("[data-t]").forEach(b => b.onclick = () => { tab = b.dataset.t; show(); }); }
+async function show() { if (tab === "cases") return cases(); if (tab === "farmers") return farmers(); return events(); }
+
+async function cases() {
+  V.innerHTML = nav() + `<p class="muted">Loading…</p>`; bindNav();
+  const { data } = await sb.from("hariyo_cases").select("*, hariyo_farmers(name,phone,village,district,state)").order("created_at", { ascending: false }).limit(200);
+  const rows = data || [];
+  const urls = {};
+  const all = rows.flatMap(r => r.photos || []);
+  if (all.length) { const { data: s } = await sb.storage.from("hariyo-cases").createSignedUrls(all, 3600); (s || []).forEach(x => urls[x.path] = x.signedUrl); }
+  V.innerHTML = nav() + `<p class="muted">${rows.filter(r => r.status === "new").length} waiting · ${rows.length} total</p>` + rows.map(r => { const f = r.hariyo_farmers || {}; return `<div class="card">
+    <div class="plot"><h3>${esc(f.name)} · ${esc(r.crop)}</h3><span class="tag ${r.status==="new"?"new":""}">${esc(r.status)}</span></div>
+    <p class="small muted">${dt(r.created_at)} · ${esc(f.village||"")} ${esc(f.district||"")} ${esc(f.state||"")} · <a href="tel:${esc(f.phone)}">${esc(f.phone)}</a></p>
+    <p>${esc(r.problem)}</p>
+    <div class="thumbs">${(r.photos||[]).map(p => urls[p] ? `<a href="${urls[p]}" target="_blank" rel="noopener"><img src="${urls[p]}" alt="Crop photo"></a>` : "").join("")}</div>
+    <label for="r${r.id}">Reply to farmer (shown in the app)</label><textarea id="r${r.id}">${esc(r.reply||"")}</textarea>
+    <div class="row" style="margin-top:8px"><button class="btn" data-save="${r.id}">Save reply</button>
+    <a class="btn tur" target="_blank" rel="noopener" data-wa="${r.id}" href="#">Send on WhatsApp</a>
+    <button class="btn alt" data-close="${r.id}">Mark closed</button></div></div>`; }).join("") || `<div class="card empty">No reports yet.</div>`;
+  bindNav();
+  const byId = Object.fromEntries(rows.map(r => [r.id, r]));
+  document.querySelectorAll("[data-save]").forEach(b => b.onclick = async () => { const id = b.dataset.save; await sb.from("hariyo_cases").update({ reply: $("#r"+id).value, status: "replied", updated_at: new Date().toISOString() }).eq("id", id); cases(); });
+  document.querySelectorAll("[data-close]").forEach(b => b.onclick = async () => { await sb.from("hariyo_cases").update({ status: "closed", updated_at: new Date().toISOString() }).eq("id", b.dataset.close); cases(); });
+  document.querySelectorAll("[data-wa]").forEach(a => a.onclick = () => { const r = byId[a.dataset.wa], f = r.hariyo_farmers || {}; a.href = waTo(f.phone, `Namaste ${f.name}, about your ${r.crop} report on Hariyo: ${$("#r"+r.id).value}`); });
+}
+
+async function farmers() {
+  V.innerHTML = nav() + `<p class="muted">Loading…</p>`; bindNav();
+  const { data } = await sb.from("hariyo_farmers").select("name,phone,village,district,state,created_at,hariyo_plots(crop,acres,start_date)").order("created_at", { ascending: false }).limit(1000);
+  const rows = data || [];
+  V.innerHTML = nav() + `<div class="row" style="margin-bottom:10px"><p class="muted">${rows.length} farmers</p><button class="btn alt" id="csv" style="flex:0 0 auto">Download CSV</button></div>
+  <div class="card" style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Phone</th><th>Place</th><th>Crops</th><th>Joined</th></tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r.name)}</td><td><a href="https://wa.me/91${esc(r.phone)}" target="_blank" rel="noopener">${esc(r.phone)}</a></td><td>${esc([r.village,r.district,r.state].filter(Boolean).join(", "))}</td><td>${esc((r.hariyo_plots||[]).map(p => p.crop + (p.acres ? ` (${p.acres} ac)` : "")).join(", "))}</td><td>${dt(r.created_at)}</td></tr>`).join("")}</tbody></table></div>`;
+  bindNav();
+  $("#csv").onclick = () => { const q = s => `"${String(s ?? "").replace(/"/g,'""')}"`; const csv = ["name,phone,village,district,state,crops,joined"].concat(rows.map(r => [r.name,r.phone,r.village,r.district,r.state,(r.hariyo_plots||[]).map(p=>p.crop).join(" "),r.created_at].map(q).join(","))).join("\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "hariyo-farmers.csv"; a.click(); };
+}
+
+async function events() {
+  V.innerHTML = nav() + `<p class="muted">Loading…</p>`; bindNav();
+  const { data } = await sb.from("hariyo_events").select("*, hariyo_registrations(count)").order("starts_at", { ascending: false });
+  V.innerHTML = nav() + `<form class="card" id="f"><h2>Add a meeting</h2>
+    <label for="t">Title</label><input id="t" required placeholder="Sugarcane: a gap-free season">
+    <div class="row"><div><label for="w">Date and time</label><input id="w" type="datetime-local" required></div><div><label for="m">Type</label><select id="m"><option value="zoom">Online (Zoom)</option><option value="village">Village meeting</option></select></div></div>
+    <div class="row"><div><label for="c">Crop (optional)</label><input id="c" placeholder="sugarcane"></div><div><label for="l">Language</label><input id="l" value="Gujarati"></div></div>
+    <label for="p">Place (village meetings)</label><input id="p">
+    <label for="k">Zoom link (online)</label><input id="k" type="url">
+    <label for="d">Short description</label><textarea id="d"></textarea>
+    <button class="btn full" style="margin-top:10px">Publish meeting</button></form>
+  ${(data||[]).map(e => `<div class="card"><div class="plot"><h3>${esc(e.title)}</h3><span class="tag">${e.hariyo_registrations?.[0]?.count || 0} registered</span></div><p class="small muted">${dt(e.starts_at)} · ${e.mode === "zoom" ? "Zoom" : esc(e.place)} · ${esc(e.language)}</p><button class="x" data-off="${e.id}" data-a="${e.active}">${e.active ? "Hide from app" : "Show in app"}</button></div>`).join("")}`;
+  bindNav();
+  $("#f").onsubmit = async ev => { ev.preventDefault(); const { error } = await sb.from("hariyo_events").insert({ title: $("#t").value, starts_at: new Date($("#w").value).toISOString(), mode: $("#m").value, crop: $("#c").value || null, language: $("#l").value, place: $("#p").value || null, link: $("#k").value || null, description: $("#d").value || null }); if (error) alert(error.message); else events(); };
+  document.querySelectorAll("[data-off]").forEach(b => b.onclick = async () => { await sb.from("hariyo_events").update({ active: b.dataset.a !== "true" }).eq("id", b.dataset.off); events(); });
+}
+sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_IN" && !$("#out").style.display) boot(); });
+boot();
+</script>
+</body>
+</html>
