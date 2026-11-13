@@ -63,6 +63,35 @@ const plotName = p => p.name || (crop(p.crop) || {}).name || p.crop;
 const areaTxt = p => p.area ? `${+p.area} ${UNITS[p.unit] || p.unit}` : "";
 const kind = k => KINDS.find(x => x.k === k) || KINDS[KINDS.length - 1];
 const HELP = "Facing any problem in your crop? Get help from an expert";
+const SOIL_TYPES = ["Black (cotton) soil", "Medium black", "Red soil", "Sandy", "Sandy loam", "Loam", "Clay", "Alluvial", "Saline / alkaline", "Rocky / murrum", "Not sure"];
+const SOIL_COND = ["Hard", "Normal", "Soft"];
+const PH_BANDS = ["Below 6.5 (acidic)", "6.6 to 7.2 (neutral)", "7.3 to 8.0 (slightly alkaline)", "8.1 and above (alkaline)", "Not tested"];
+const LNH = ["Low", "Normal", "High", "Not tested"];
+const WATER_SRC = ["Canal", "Borewell", "Open well", "River or pond", "Farm pond", "Rain-fed only", "Other"];
+const IRR_METHOD = ["Flood", "Furrow", "Drip", "Sprinkler", "Rain-fed"];
+const LOOKS = ["Excellent", "Good", "Average", "Poor"];
+const GERM = ["95% or more", "85 to 95%", "70 to 85%", "Below 70%"];
+const COUNT = ["Less than 4", "5 to 7", "8 to 10", "11 to 14", "15 or more"];
+const YIELD_UNITS = ["tonnes per acre", "tonnes per vigha", "quintal per acre", "quintal per vigha", "kg per plant", "kg per tree"];
+const VARIETIES = { sugarcane: ["Co 86032", "CoC 671", "Co 0238", "CoM 0265", "Co 86002", "CoVSI 9805", "Co 0118"], mango: ["Kesar", "Alphonso (Hapus)", "Rajapuri", "Langra", "Dashehari", "Totapuri", "Amrapali"], potato: ["Kufri Jyoti", "Kufri Pukhraj", "Lady Rosetta", "Kufri Chipsona", "Santana"], banana: ["Grand Naine (G9)", "Robusta", "Shrimanti", "Basrai"], apple: ["Royal Delicious", "Red Delicious", "Gala", "Granny Smith", "Fuji"], pomegranate: ["Bhagwa", "Ganesh", "Ruby", "Mridula"], citrus: ["Nagpur mandarin", "Kagzi lime", "Mosambi", "Kinnow"], onion: ["Agrifound Light Red", "N-53", "Bhima Super", "Pusa Red"], cotton: [], groundnut: ["GG 20", "GJG 32", "TG 37A", "Kadiri 6"] };
+const RATOON = ["sugarcane", "banana"];
+const COUNT_LABEL = { sugarcane: "Average tillers per clump", paddy: "Average tillers per hill", cereals: "Average tillers per plant", banana: "Suckers per plant" };
+function issueList(slug) {
+  if (slug === "sugarcane") return ["Poor germination", "Weak growth", "Less tillers", "Low stalk height", "Thin stalks", "Low stalk weight", "Dying of stalks", "Weak crop attacked by pests and diseases", "Unfavourable weather", "Needed more fertilizers", "Increased chemical dependency", "Low recovery / sugar"];
+  const c = crop(slug) || { problems: [] };
+  return [...new Set(["Poor germination or establishment", "Weak growth"].concat(c.problems, ["Weak crop attacked by pests and diseases", "Unfavourable weather", "Needed more fertilizers", "Increased chemical dependency", "Low yield"]))];
+}
+const photoUrl = path => path ? `${SB_URL}/storage/v1/object/public/hariyo-fields/${path}` : "";
+async function uploadFieldPhoto(file) {
+  const blob = await shrink(file), path = `${today()}/${crypto.randomUUID()}.jpg`;
+  const { error } = await sb.storage.from("hariyo-fields").upload(path, blob, { contentType: "image/jpeg" });
+  return error ? null : path;
+}
+const opts = (list, cur) => `<option value="">Choose</option>` + list.map(x => `<option ${x === cur ? "selected" : ""}>${esc(x)}</option>`).join("");
+const chips = (name, list, cur) => `<div class="chips">${list.map((x, i) => `<label class="chip"><input type="checkbox" name="${name}" value="${esc(x)}" ${(cur || []).includes(x) ? "checked" : ""}><span>${esc(x)}</span></label>`).join("")}</div>`;
+const checked = name => [...document.querySelectorAll(`[name="${name}"]:checked`)].map(i => i.value);
+const upcoming = p => (ME.activities || []).filter(a => a.plot_id === p.id && a.happened_on > today()).sort((a, b) => a.happened_on < b.happened_on ? -1 : 1);
+const lastObs = p => (ME.observations || []).find(o => o.plot_id === p.id);
 
 function quote(offset) {
   const d = new Date(), start = new Date(d.getFullYear(), 0, 0);
@@ -130,13 +159,16 @@ const needMe = next => { if (!ME) { signup(next); return false; } return true; }
 function tile(p) {
   const c = crop(p.crop); if (!c) return "";
   const s = stageOf(c, p.start_date), st = s.idx != null ? c.stages[s.idx] : null;
+  const up = upcoming(p)[0];
   return `<a class="tile" href="#/field/${p.id}">
+    <div class="tile-photo">${p.photo ? `<img src="${photoUrl(p.photo)}" alt="" loading="lazy">` : `<span>📷</span>`}</div><div class="tile-body">
     <div class="tile-top"><span class="tile-name">${esc(plotName(p))}</span>${areaTxt(p) ? `<span class="tag">${esc(areaTxt(p))}</span>` : ""}</div>
     <div class="tile-crop">${esc(c.name)}</div>
     <div class="tile-age">${s.day != null ? `Day ${Math.max(s.day, 0)}` : new Date().toLocaleDateString("en-IN", { month: "long" })}</div>
     <div class="tile-stage">${st ? esc(st.name) : "Care all year"}${s.next ? `<span> · next: ${esc(c.stages[s.next.idx].name.split(" and ")[0])} in ${s.next.inDays} d</span>` : ""}</div>
     <div class="stem sm" aria-hidden="true">${c.stages.map((_, i) => `<i class="${s.idx == null ? "" : i < s.idx ? "done" : i === s.idx ? "now" : ""}"></i>`).join("")}</div>
-    <div class="tile-next">${esc(nextAction(p))}</div></a>`;
+    ${up ? `<div class="tile-date">Next: ${esc(kind(up.kind).l.split(" (")[0])} on ${new Date(up.happened_on).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</div>` : ""}
+    <div class="tile-next">${esc(nextAction(p))}</div></div></a>`;
 }
 function home() {
   setTab("home");
@@ -160,15 +192,19 @@ function field(id) {
   if (!needMe(location.hash)) return;
   const p = plotById(id); if (!p) return home();
   const c = crop(p.crop), s = stageOf(c, p.start_date), st = s.idx != null ? c.stages[s.idx] : null;
-  const acts = (ME.activities || []).filter(a => a.plot_id === p.id);
+  const acts = (ME.activities || []).filter(a => a.plot_id === p.id && a.happened_on <= today());
+  const ups = upcoming(p), obs = (ME.observations || []).filter(o => o.plot_id === p.id), lo = obs[0];
   const cases = (ME.cases || []).filter(x => x.plot_id === p.id);
   const fertOrder = acts.filter(a => a.kind === "fert").sort((a, b) => a.happened_on < b.happened_on ? -1 : 1).map(a => a.id);
   const items = [
     ...acts.map(a => ({ d: a.happened_on, html: diaryAct(a, fertOrder) })),
     ...cases.map(x => ({ d: x.happened_on || x.created_at.slice(0, 10), html: diaryCase(x) })),
+    ...obs.map(o => ({ d: o.observed_on, html: diaryObs(o, c) })),
     ...(p.start_date ? [{ d: p.start_date, html: `<li class="ev"><span class="ev-i">🌾</span><div><div class="ev-d">${fmtDate(p.start_date)}</div><strong>${esc(c.timing.label || "Planted")}</strong></div></li>` }] : [])
   ].sort((a, b) => a.d < b.d ? 1 : a.d > b.d ? -1 : 0);
+  const sl = p.soil || {}, wt = p.water || {}, ly = p.last_year || {};
   render(`<p><a href="#/home">← All fields</a></p>${quote(CROPS.indexOf(c) + 1)}
+  ${p.photo ? `<img class="field-photo" src="${photoUrl(p.photo)}" alt="${esc(plotName(p))} crop photo">` : `<a class="field-photo empty" href="#/obs/${p.id}">📷 Add a photo of this field</a>`}
   <section class="season"><div class="crop">${esc(plotName(p))} · ${esc(c.name)}${areaTxt(p) ? " · " + esc(areaTxt(p)) : ""}</div>
     ${s.day != null ? `<div class="day">Day ${Math.max(s.day, 0)}<small>since ${fmtDate(p.start_date)}</small></div>` : `<div class="day" style="font-size:2.2rem">${new Date().toLocaleDateString("en-IN", { month: "long" })}</div>`}
     <div class="stage">${st ? esc(st.name) : "Care all year"}</div>
@@ -177,14 +213,24 @@ function field(id) {
     ${st ? `<div class="what"><p style="margin:0">${esc(st.text)}</p></div>` : ""}
     <div class="what next"><strong>Next action:</strong> ${esc(nextAction(p))}${s.next ? `<br><span class="small">Next stage, ${esc(c.stages[s.next.idx].name)}, in about ${s.next.inDays} days.</span>` : ""}</div>
   </section>
-  <div class="row act-btns"><a class="btn" href="#/log/${p.id}">+ Add dose or work</a><a class="btn tur" href="#/help?field=${p.id}">Report a problem</a></div>
+  <div class="act-grid"><a class="btn" href="#/obs/${p.id}">📷 Update crop status</a><a class="btn" href="#/log/${p.id}">+ Add or plan a dose / work</a><a class="btn tur" href="#/help?field=${p.id}">⚠️ Report a problem</a><a class="btn alt" href="#/profile/${p.id}">Field profile</a></div>
+  ${ups.length ? `<div class="card"><h2>Coming up</h2><ul class="diary">${ups.map(a => `<li class="ev up"><span class="ev-i">${kind(a.kind).icon}</span><div><div class="ev-d">${fmtDate(a.happened_on)} · planned</div><strong>${esc(kind(a.kind).l)}</strong>${a.product ? `<div>${esc(a.product)}</div>` : ""}<button class="x" data-delact="${a.id}">Delete</button></div></li>`).join("")}</ul></div>` : ""}
+  ${lo ? `<div class="card"><h2>Crop status on ${fmtDate(lo.observed_on)}</h2>${obsFacts(lo, c)}</div>` : ""}
+  <div class="card"><div class="plot"><h2>Field profile</h2><a class="x" href="#/profile/${p.id}">Edit</a></div>
+    <dl class="facts">${[["Variety", p.variety], ["Planting", p.plant_type], ["Soil", [sl.type, sl.condition].filter(Boolean).join(", ")], ["Soil pH", sl.ph], ["Soil EC", sl.ec], ["Water", [wt.source === "Other" ? wt.other : wt.source, wt.method].filter(Boolean).join(", ")], ["Water pH / EC / TDS", [wt.ph, wt.ec, wt.tds].some(Boolean) ? [wt.ph || "-", wt.ec || "-", wt.tds || "-"].join(" / ") : ""]].filter(x => x[1]).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("") || `<dd class="muted">Add soil, water and variety details so our expert can advise better.</dd>`}</dl>
+    ${(p.issues || []).length ? `<h3>Problems this year</h3><p>${p.issues.map(x => `<span class="tag new">${esc(x)}</span>`).join(" ")}</p>` : ""}
+    ${ly.yield || (ly.problems || []).length ? `<h3>Last year</h3><p class="small">${ly.variety ? esc(ly.variety) + " · " : ""}${ly.yield ? esc(ly.yield + " " + (ly.yield_unit || "")) : ""}</p>${(ly.problems || []).length ? `<p>${ly.problems.map(x => `<span class="tag">${esc(x)}</span>`).join(" ")}</p>` : ""}` : ""}</div>
   <h2>Field diary</h2>
   ${items.length ? `<ul class="diary">${items.map(i => i.html).join("")}</ul>` : `<div class="card empty"><p class="muted">Nothing recorded yet. Start with your planting date and basal dose.</p></div>`}
   ${product(c)}
   <p class="small"><a href="#/crop/${c.slug}">Full ${esc(c.name.toLowerCase())} guide</a> · <a href="#/farm?edit=${p.id}">Edit field</a></p>`);
   document.querySelectorAll("[data-delact]").forEach(b => b.onclick = async () => {
-    if (!confirm("Delete this diary entry?")) return;
+    if (!confirm("Delete this entry?")) return;
     await sb.rpc("hariyo_del_activity", { p_token: TOKEN, p_id: b.dataset.delact }); await loadMe(); field(id);
+  });
+  document.querySelectorAll("[data-delobs]").forEach(b => b.onclick = async () => {
+    if (!confirm("Delete this status update?")) return;
+    await sb.rpc("hariyo_del_obs", { p_token: TOKEN, p_id: b.dataset.delobs }); await loadMe(); field(id);
   });
 }
 function diaryAct(a, fertOrder) {
@@ -195,6 +241,13 @@ function diaryAct(a, fertOrder) {
     ${a.product ? `<div>${esc(a.product)}${qty ? " · " + qty : ""}</div>` : qty ? `<div>${qty}</div>` : ""}
     ${a.method ? `<div class="small muted">${esc(a.method)}</div>` : ""}${a.note ? `<div class="small">${esc(a.note)}</div>` : ""}
     <button class="x" data-delact="${a.id}">Delete</button></div></li>`;
+}
+function obsFacts(o, c) {
+  const f = [["Crop looks", o.look], ["Germination", o.germination], [COUNT_LABEL[c.slug] || "Average shoots or branches per plant", o.count_band], ["Average height", o.height ? `${+o.height} ${o.height_unit || ""}` : ""]].filter(x => x[1]);
+  return `${o.photo ? `<img class="obs-photo" src="${photoUrl(o.photo)}" alt="Crop photo" loading="lazy">` : ""}<dl class="facts">${f.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>${o.note ? `<p class="small">${esc(o.note)}</p>` : ""}`;
+}
+function diaryObs(o, c) {
+  return `<li class="ev"><span class="ev-i">📷</span><div><div class="ev-d">${fmtDate(o.observed_on)}</div><strong>Crop status${o.look ? ": " + esc(o.look) : ""}</strong>${obsFacts(Object.assign({}, o, { look: null }), c)}<button class="x" data-delobs="${o.id}">Delete</button></div></li>`;
 }
 function diaryCase(x) {
   return `<li class="ev prob"><span class="ev-i">⚠️</span><div><div class="ev-d">${fmtDate(x.happened_on || x.created_at)}</div>
@@ -210,10 +263,10 @@ function logForm(id) {
   const p = plotById(id); if (!p) return home();
   const c = crop(p.crop);
   const prods = [...new Set(FERTS.concat(CROPS.map(x => x.product.name).filter(Boolean)))];
-  render(`<p><a href="#/field/${p.id}">← ${esc(plotName(p))}</a></p><h1>Add to diary</h1><p class="muted">${esc(plotName(p))} · ${esc(c.name)}</p>
+  render(`<p><a href="#/field/${p.id}">← ${esc(plotName(p))}</a></p><h1>Add or plan</h1><p class="muted">${esc(plotName(p))} · ${esc(c.name)}</p>
   <form class="card" id="f">
     <label for="k">What did you do?</label><select id="k">${KINDS.map(k => `<option value="${k.k}">${k.icon} ${esc(k.l)}</option>`).join("")}</select>
-    <label for="dt">Date</label><input id="dt" type="date" value="${today()}" max="${today()}">
+    <label for="dt">Date</label><input id="dt" type="date" value="${today()}"><p class="small muted" style="margin:4px 0 0">Choose a future date to plan it. Planned work shows on the field tile.</p>
     <div id="fx">
       <label for="pr">Fertilizer or product name</label><input id="pr" list="pl" placeholder="Type or choose"><datalist id="pl">${prods.map(x => `<option value="${esc(x)}">`).join("")}</datalist>
       <div class="row"><div><label for="q">Quantity</label><input id="q" type="number" inputmode="decimal" min="0" step="any"></div>
@@ -233,6 +286,90 @@ function logForm(id) {
       p_product: k.fert ? $("#pr").value.trim() : null, p_qty: k.fert && $("#q").value ? Number($("#q").value) : null, p_qty_unit: k.fert ? $("#qu").value : null,
       p_per: k.fert ? $("#pu").value : null, p_method: k.fert ? $("#m").value || null : null, p_note: $("#nt").value.trim() || null });
     if (error) { $("#e").textContent = "Could not save. Try again."; $("#b").disabled = false; return; }
+    await loadMe(); go(`#/field/${p.id}`);
+  };
+}
+
+/* ---------- Field profile: photo, variety, soil, water, this year and last year ---------- */
+function profileForm(id) {
+  setTab("home");
+  if (!needMe(location.hash)) return;
+  const p = plotById(id); if (!p) return home();
+  const c = crop(p.crop), sl = p.soil || {}, wt = p.water || {}, ly = p.last_year || {}, iss = issueList(c.slug);
+  render(`<p><a href="#/field/${p.id}">← ${esc(plotName(p))}</a></p><h1>Field profile</h1><p class="muted">${esc(plotName(p))} · ${esc(c.name)}. The more you fill in, the better our expert can advise.</p>
+  <form class="card" id="f">
+    <h2>Field photo</h2>
+    <div class="row"><label class="btn alt pick">📷 Take photo<input id="cam" type="file" accept="image/*" capture="environment" hidden></label><label class="btn alt pick">🖼️ From gallery<input id="gal" type="file" accept="image/*" hidden></label></div>
+    <div class="thumbs" id="th">${p.photo ? `<img src="${photoUrl(p.photo)}" alt="Current field photo">` : ""}</div>
+    <h2>Crop</h2>
+    <label for="va">Variety</label><input id="va" list="vl" value="${esc(p.variety || "")}" placeholder="Type or choose"><datalist id="vl">${(VARIETIES[c.slug] || []).map(v => `<option value="${esc(v)}">`).join("")}</datalist>
+    ${RATOON.includes(c.slug) ? `<label for="pt">Planting type</label><select id="pt">${opts(["New planting (Ropan)", "Ratoon (Lam) 1st", "Ratoon (Lam) 2nd", "Ratoon (Lam) 3rd or more"], p.plant_type)}</select>` : ""}
+    <h2>Soil</h2>
+    <div class="row"><div><label for="st">Soil type</label><select id="st">${opts(SOIL_TYPES, sl.type)}</select></div><div><label for="sc">Soil condition</label><select id="sc">${opts(SOIL_COND, sl.condition)}</select></div></div>
+    <div class="row"><div><label for="sp">Soil pH</label><select id="sp">${opts(PH_BANDS, sl.ph)}</select></div><div><label for="se">Soil EC (salts)</label><select id="se">${opts(LNH, sl.ec)}</select></div></div>
+    <h2>Water</h2>
+    <div class="row"><div><label for="ws">Irrigation source</label><select id="ws">${opts(WATER_SRC, wt.source)}</select></div><div><label for="wm">Irrigation method</label><select id="wm">${opts(IRR_METHOD, wt.method)}</select></div></div>
+    <div id="wow"><label for="wo">Please specify</label><input id="wo" value="${esc(wt.other || "")}"></div>
+    <div class="row three"><div><label for="wp">Water pH</label><select id="wp">${opts(LNH, wt.ph)}</select></div><div><label for="we">Water EC</label><select id="we">${opts(LNH, wt.ec)}</select></div><div><label for="wd">Water TDS</label><select id="wd">${opts(LNH, wt.tds)}</select></div></div>
+    <h2>Problems this year</h2>${chips("iy", iss, p.issues)}
+    <h2>Last year</h2>
+    <label for="lv">Variety last year</label><input id="lv" list="vl" value="${esc(ly.variety || "")}">
+    <div class="row"><div><label for="ly">Yield</label><input id="ly" type="number" inputmode="decimal" min="0" step="any" value="${esc(ly.yield || "")}"></div><div><label for="lu">Unit</label><select id="lu">${YIELD_UNITS.map(u => `<option ${u === ly.yield_unit ? "selected" : ""}>${u}</option>`).join("")}</select></div></div>
+    <label>Problems faced last year</label>${chips("ly", iss, ly.problems)}
+    <label for="ln">Anything else about last season? (optional)</label><input id="ln" value="${esc(ly.note || "")}">
+    <label class="flag"><input type="checkbox" id="fl"> Share this year's problems with our expert now</label>
+    <p class="err" id="e" role="alert"></p><button class="btn full" id="b">Save field profile</button></form>`);
+  const syncW = () => { $("#wow").style.display = $("#ws").value === "Other" ? "" : "none"; };
+  $("#ws").onchange = syncW; syncW();
+  let file = null;
+  const pick = e => { file = e.target.files[0] || file; if (file) $("#th").innerHTML = `<img src="${URL.createObjectURL(file)}" alt="New field photo">`; };
+  $("#cam").onchange = pick; $("#gal").onchange = pick;
+  $("#f").onsubmit = async ev => {
+    ev.preventDefault(); $("#b").disabled = true; $("#b").textContent = "Saving…";
+    let photo = null; if (file) { try { photo = await uploadFieldPhoto(file); } catch (e) {} }
+    const issues = checked("iy");
+    const { error } = await sb.rpc("hariyo_save_profile", { p_token: TOKEN, p_id: p.id, p_variety: $("#va").value, p_plant_type: $("#pt") ? $("#pt").value : null,
+      p_soil: { type: $("#st").value, condition: $("#sc").value, ph: $("#sp").value, ec: $("#se").value },
+      p_water: { source: $("#ws").value, other: $("#ws").value === "Other" ? $("#wo").value.trim() : "", method: $("#wm").value, ph: $("#wp").value, ec: $("#we").value, tds: $("#wd").value },
+      p_last_year: { variety: $("#lv").value.trim(), yield: $("#ly").value, yield_unit: $("#lu").value, problems: checked("ly"), note: $("#ln").value.trim() },
+      p_issues: issues, p_photo: photo });
+    if (error) { $("#e").textContent = "Could not save. Try again."; $("#b").disabled = false; $("#b").textContent = "Save field profile"; return; }
+    if ($("#fl").checked && issues.length) {
+      await sb.rpc("hariyo_add_case", { p_token: TOKEN, p_plot: p.id, p_crop: c.slug, p_issue: issues.slice(0, 3).join(", ") + (issues.length > 3 ? " and more" : ""), p_severity: null, p_date: today(), p_problem: "Problems this year: " + issues.join("; "), p_photos: [] });
+    }
+    await loadMe(); go(`#/field/${p.id}`);
+  };
+}
+
+/* ---------- Crop status update: photo, how it looks, germination, tillers, height ---------- */
+function obsForm(id) {
+  setTab("home");
+  if (!needMe(location.hash)) return;
+  const p = plotById(id); if (!p) return home();
+  const c = crop(p.crop), sown = c.timing.mode === "days";
+  render(`<p><a href="#/field/${p.id}">← ${esc(plotName(p))}</a></p><h1>Update crop status</h1><p class="muted">${esc(plotName(p))} · ${esc(c.name)}. A photo every week or two shows how your crop is changing.</p>
+  <form class="card" id="f">
+    <label>Photo of the crop today</label>
+    <div class="row"><label class="btn alt pick">📷 Take photo<input id="cam" type="file" accept="image/*" capture="environment" hidden></label><label class="btn alt pick">🖼️ From gallery<input id="gal" type="file" accept="image/*" hidden></label></div>
+    <div class="thumbs" id="th"></div>
+    <label class="flag"><input type="checkbox" id="sp" checked> Use this photo as the field picture</label>
+    <label for="dt">Date</label><input id="dt" type="date" value="${today()}" max="${today()}">
+    <label>How does the crop look?</label><div class="sevs">${LOOKS.map((l, i) => `<label class="sev-opt"><input type="radio" name="lk" value="${l}" ${i === 1 ? "checked" : ""}><span class="sev look-${i}">${l}</span></label>`).join("")}</div>
+    ${sown ? `<label for="gm">Germination</label><select id="gm">${opts(GERM)}</select>` : ""}
+    <label for="cb">${esc(COUNT_LABEL[c.slug] || "Average shoots or branches per plant")}</label><select id="cb">${opts(COUNT)}</select>
+    <div class="row"><div><label for="ht">Average height</label><input id="ht" type="number" inputmode="decimal" min="0" step="any"></div><div><label for="hu">Unit</label><select id="hu"><option>feet</option><option>inches</option><option>cm</option></select></div></div>
+    <label for="nt">Note (optional)</label><input id="nt" placeholder="Example: lower leaves yellowing in one corner">
+    <p class="err" id="e" role="alert"></p><button class="btn full" id="b">Save status</button></form>`);
+  let file = null;
+  const pick = e => { file = e.target.files[0] || file; if (file) $("#th").innerHTML = `<img src="${URL.createObjectURL(file)}" alt="Crop photo">`; };
+  $("#cam").onchange = pick; $("#gal").onchange = pick;
+  $("#f").onsubmit = async ev => {
+    ev.preventDefault(); $("#b").disabled = true; $("#b").textContent = "Saving…";
+    let photo = null; if (file) { try { photo = await uploadFieldPhoto(file); } catch (e) {} }
+    const { error } = await sb.rpc("hariyo_add_obs", { p_token: TOKEN, p_plot: p.id, p_date: $("#dt").value || today(), p_photo: photo,
+      p_look: (document.querySelector("[name=lk]:checked") || {}).value || null, p_germ: $("#gm") ? $("#gm").value || null : null, p_count: $("#cb").value || null,
+      p_height: $("#ht").value ? Number($("#ht").value) : null, p_hunit: $("#hu").value, p_note: $("#nt").value.trim() || null, p_set_photo: $("#sp").checked });
+    if (error) { $("#e").textContent = "Could not save. Try again."; $("#b").disabled = false; $("#b").textContent = "Save status"; return; }
     await loadMe(); go(`#/field/${p.id}`);
   };
 }
@@ -395,6 +532,8 @@ async function route() {
   if (parts[0] === "farm") return farm(q);
   if (parts[0] === "field") return field(parts[1]);
   if (parts[0] === "log") return logForm(parts[1]);
+  if (parts[0] === "profile") return profileForm(parts[1]);
+  if (parts[0] === "obs") return obsForm(parts[1]);
   if (parts[0] === "help") return help(q);
   if (parts[0] === "events") return events();
   if (parts[0] === "shop") return shop();

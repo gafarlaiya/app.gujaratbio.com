@@ -102,3 +102,25 @@ textarea{min-height:110px}
 .sev-opt input:focus-visible+.sev{outline:3px solid var(--tur)}
 .pick{cursor:pointer;font-size:.98rem}
 .th{position:relative}.th-x{position:absolute;top:-6px;right:-6px;width:24px;height:24px;border-radius:50%;border:0;background:var(--ink);color:#fff;cursor:pointer}
+/* Field photo on tiles and field page */
+.tile{display:grid;grid-template-columns:84px 1fr;gap:12px;align-items:start}
+.tile.add{display:flex}
+.tile-photo{width:84px;height:104px;border-radius:12px;overflow:hidden;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;font-size:1.6rem}
+.tile-photo img{width:100%;height:100%;object-fit:cover}
+.tile-body{min-width:0}
+.tile-date{font-size:.88rem;font-weight:700;color:var(--tur);margin:0 0 6px}
+.field-photo{display:block;width:100%;height:210px;object-fit:cover;border-radius:18px;margin:0 0 12px}
+.field-photo.empty{height:auto;padding:22px;text-align:center;background:#fff;border:2px dashed var(--shoot);color:var(--leaf);font-weight:700;text-decoration:none}
+.obs-photo{width:100%;max-height:260px;object-fit:cover;border-radius:12px;margin:6px 0}
+.act-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 16px}.act-grid .btn{font-size:.95rem;padding:0 10px;text-align:center;line-height:1.2}
+.facts{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:6px 0 8px}.facts dt{color:var(--ink2);font-size:.9rem}.facts dd{margin:0;font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 4px}
+.chip{margin:0;font-weight:400;position:relative}.chip input{position:absolute;opacity:0;width:1px;height:1px;left:0;top:0}
+.chip span{display:inline-block;padding:8px 12px;border-radius:999px;border:1.5px solid var(--line);background:#fff;font-size:.92rem;cursor:pointer}
+.chip input:checked+span{background:#FFF1CC;border-color:#C9961E;font-weight:700}
+.chip input:focus-visible+span{outline:3px solid var(--tur)}
+.flag{display:flex;gap:10px;align-items:center;font-weight:600;margin:16px 0 4px}.flag input{width:22px;height:22px}
+.row.three>div{min-width:0}
+.look-0{background:#D6EFC9;color:#1F5A12}.look-1{background:#E5F2DF;color:#2E6B1F}.look-2{background:#FFF1CC;color:#7A5300}.look-3{background:#F9D3CF;color:#8E1B12}
+.ev.up{border-style:dashed}
+form h2{margin-top:18px}

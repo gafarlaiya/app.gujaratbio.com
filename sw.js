@@ -1,6 +1,6 @@
 // Hariyo service worker: keeps the app shell available offline; live data always comes from the network.
-const V = "hariyo-v3";
-const SHELL = ["/", "/index.html", "/app.css?v=3", "/app.js?v=3", "/crops.json", "/icon-192.png", "/fonts/mukta-latin-400-normal.woff2", "/fonts/baloo-2-latin-800-normal.woff2"];
+const V = "hariyo-v4";
+const SHELL = ["/", "/index.html", "/app.css?v=4", "/app.js?v=4", "/crops.json", "/icon-192.png", "/fonts/mukta-latin-400-normal.woff2", "/fonts/baloo-2-latin-800-normal.woff2"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== V).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener("fetch", e => {
