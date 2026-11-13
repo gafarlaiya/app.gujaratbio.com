@@ -163,7 +163,8 @@ async function loadMe() {
   ME = data;
 }
 function render(html) { $("#view").innerHTML = html; window.scrollTo(0, 0); }
-function setTab(t) { document.querySelectorAll(".tabs a").forEach(a => a.classList.toggle("on", a.dataset.tab === t)); }
+function setTab(t) { document.querySelectorAll(".tabs a").forEach(a => a.classList.toggle("on", a.dataset.tab === t)); badge(); }
+function badge() { const a = document.querySelector('.tabs a[data-tab="help"]'); if (!a) return; let b = a.querySelector(".dot"); const n = unread(); if (n && !b) { b = document.createElement("i"); b.className = "dot"; a.appendChild(b); } if (b) { b.textContent = n || ""; b.style.display = n ? "" : "none"; } }
 function go(h) { if (location.hash === h) route(); else location.hash = h; }
 
 /* ---------- Sign up ---------- */
@@ -215,6 +216,7 @@ function home() {
   }
   const plots = [...(ME.plots || [])].sort((a, b) => (a.farm || a.name || "").localeCompare(b.farm || b.name || "") || (+a.age_years || 0) - (+b.age_years || 0));
   render(`${quote(0)}<p class="muted" style="margin:0 0 10px">Namaste, ${esc(ME.farmer.name.split(" ")[0])}</p>
+  ${unread() ? `<a class="help-cta" href="#/help" style="background:var(--leaf);color:#fff"><strong>${unread()} new message(s) from your expert</strong><span>Tap to read and reply.</span></a>` : ""}
   <div class="tiles">${plots.map(tile).join("")}<a class="tile add" href="#/farm"><span>+</span>Add a field</a></div>
   <a class="help-cta" href="#/help"><strong>${HELP}</strong><span>Send photos. Our crop team replies on WhatsApp.</span></a>
   <h2 style="margin-top:20px">Crop guides</h2>${cropGrid()}`);
@@ -263,6 +265,7 @@ function field(id) {
     if (!confirm("Delete this entry?")) return;
     await sb.rpc("hariyo_del_activity", { p_token: TOKEN, p_id: b.dataset.delact }); await loadMe(); field(id);
   });
+  bindReplies(() => field(id));
   document.querySelectorAll("[data-delobs]").forEach(b => b.onclick = async () => {
     if (!confirm("Delete this status update?")) return;
     await sb.rpc("hariyo_del_obs", { p_token: TOKEN, p_id: b.dataset.delobs }); await loadMe(); field(id);
@@ -289,8 +292,20 @@ function diaryCase(x) {
   return `<li class="ev prob"><span class="ev-i">⚠️</span><div><div class="ev-d">${fmtDate(x.happened_on || x.created_at)}</div>
     <strong>${esc(x.issue || "Problem")}</strong> ${x.severity ? `<span class="sev sev-${x.severity}">${esc(x.severity)}</span>` : ""} <span class="tag ${x.status === "new" ? "new" : ""}">${x.status === "new" ? "Waiting for expert" : x.status === "replied" ? "Expert replied" : esc(x.status)}</span>
     ${x.problem && x.problem !== x.issue ? `<div class="small">${esc(x.problem)}</div>` : ""}<div class="small muted">${x.n_photos} photo(s)</div>
-    ${x.reply ? `<div class="reply"><strong>Our expert:</strong> ${esc(x.reply)}</div>` : ""}</div></li>`;
+    ${x.reply ? `<div class="reply"><strong>Our expert:</strong> ${esc(x.reply)}</div>` : ""}
+    ${thread(x.id)}<div class="inline-reply"><input id="rm_${x.id}" placeholder="Reply to the expert"><button class="btn" type="button" data-reply="${x.id}">Send</button></div></div></li>`;
 }
+function thread(caseId) {
+  const ms = ((ME && ME.messages) || []).filter(m => (m.case_id || null) === (caseId || null));
+  return ms.length ? `<div class="chat">${ms.map(m => `<div class="bubble ${m.sender}">${esc(m.body)}<span>${m.sender === "expert" ? esc(m.sender_name || "Expert") + " · " : ""}${new Date(m.created_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}</span></div>`).join("")}</div>` : "";
+}
+function bindReplies(after) {
+  document.querySelectorAll("[data-reply]").forEach(b => b.onclick = async () => {
+    const id = b.dataset.reply, inp = $("#rm_" + id), t = inp.value.trim(); if (!t) return;
+    b.disabled = true; await sb.rpc("hariyo_send_message", { p_token: TOKEN, p_case: id, p_body: t }); await loadMe(); after();
+  });
+}
+const unread = () => ((ME && ME.messages) || []).filter(m => m.sender === "expert" && !m.read_at).length;
 
 /* ---------- Add a dose or work ---------- */
 function logForm(id) {
@@ -547,7 +562,12 @@ function help(q) {
   const plots = ME.plots || [];
   const fp = plotById(q.get("field")) || null;
   const cases = ME.cases || [];
-  render(`<h1>Get help from an expert</h1><p class="muted">Facing any problem in your crop? Tell us what you see and add photos. Our crop experts check and reply here and on WhatsApp, usually within a day.</p>
+  const ex = ME.farmer.expert;
+  render(`<h1>Get help from an expert</h1>
+  <div class="card"><h2>${ex ? "Your expert: " + esc(ex.name) : "Chat with our crop team"}</h2>${ex && ex.phone ? `<p class="small"><a href="tel:${esc(ex.phone)}">Call ${esc(ex.phone)}</a></p>` : ""}
+    ${thread(null) || `<p class="small muted">Ask anything about your crop. Our expert replies here.</p>`}
+    <div class="inline-reply"><input id="gmsg" placeholder="Type your question"><button class="btn" type="button" id="gsend">Send</button></div></div>
+  <p class="muted">Facing any problem in your crop? Tell us what you see and add photos. Our crop experts check and reply here and on WhatsApp, usually within a day.</p>
   <form class="card" id="f">
     ${plots.length ? `<label for="fl">Which field?</label><select id="fl">${plots.map(p => `<option value="${p.id}" ${fp && fp.id === p.id ? "selected" : ""}>${esc(plotName(p))} · ${esc((crop(p.crop) || {}).name || "")}</option>`).join("")}<option value="">Another crop</option></select>` : ""}
     <div id="cw"><label for="c">Crop</label><select id="c">${CROPS.map(c => `<option value="${c.slug}" ${c.slug === q.get("crop") ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></div>
@@ -562,6 +582,9 @@ function help(q) {
     <p class="err" id="e" role="alert"></p>
     <button class="btn full" id="b">Send to our expert</button></form>
   <h2>My reports</h2>${cases.length ? `<ul class="diary">${cases.map(diaryCase).join("")}</ul>` : `<p class="muted">No reports yet.</p>`}`);
+  $("#gsend").onclick = async () => { const t = $("#gmsg").value.trim(); if (!t) return; $("#gsend").disabled = true; await sb.rpc("hariyo_send_message", { p_token: TOKEN, p_case: null, p_body: t }); await loadMe(); help(q); };
+  bindReplies(() => help(q));
+  if (unread()) sb.rpc("hariyo_read_messages", { p_token: TOKEN }).then(() => { (ME.messages || []).forEach(m => { if (m.sender === "expert") m.read_at = m.read_at || new Date().toISOString(); }); badge(); });
   const curCrop = () => { const fl = $("#fl"); const p = fl && plotById(fl.value); return p ? p.crop : $("#c").value; };
   const syncIssues = () => {
     const fl = $("#fl"); $("#cw").style.display = fl && fl.value ? "none" : "";

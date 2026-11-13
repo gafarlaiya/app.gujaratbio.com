@@ -2,100 +2,296 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hariyo admin</title><meta name="robots" content="noindex">
-<link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/app.css?v=6">
-<style>body{padding-bottom:20px}main{max-width:900px}.adtabs{display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap}.adtabs button{min-height:42px}.adtabs button.on{background:var(--leafd);color:#fff}
-table{width:100%;border-collapse:collapse;font-size:.95rem}td,th{padding:8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}.thumbs img{cursor:pointer}</style>
+<title>Hariyo control panel</title><meta name="robots" content="noindex">
+<link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/app.css?v=7">
+<style>
+body{padding-bottom:20px}main{max-width:1100px}
+.top .who{color:#fff;font-size:.9rem;opacity:.9;margin-right:10px}
+.adnav{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 16px;position:sticky;top:58px;background:var(--bg);padding:8px 0;z-index:4}
+.adnav a{padding:9px 14px;border-radius:10px;text-decoration:none;font-weight:700;color:var(--leafd);background:#fff;border:1px solid var(--line)}
+.adnav a.on{background:var(--leafd);color:#fff;border-color:var(--leafd)}
+.adnav .badge{background:var(--tur);color:var(--leafd);border-radius:999px;padding:0 7px;margin-left:4px;font-size:.8rem}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:0 0 16px}
+.kpi{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px;text-decoration:none;color:var(--ink)}
+.kpi b{display:block;font:800 1.9rem/1.1 "Baloo 2",sans-serif;color:var(--leafd)}.kpi span{font-size:.88rem;color:var(--ink2)}
+.kpi.warn b{color:#8E1B12}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}.filters>*{flex:1 1 150px;width:auto}
+table{width:100%;border-collapse:collapse;font-size:.93rem}td,th{padding:8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+tr.click{cursor:pointer}tr.click:hover{background:#F7FBF5}
+.thread{display:flex;flex-direction:column;gap:8px;margin:10px 0;max-height:420px;overflow:auto;padding:4px}
+.msg{max-width:80%;padding:8px 12px;border-radius:12px;font-size:.95rem}
+.msg.farmer{background:#fff;border:1px solid var(--line);align-self:flex-start}
+.msg.expert{background:#E5F2DF;align-self:flex-end}.msg.internal{background:#FFF1CC;align-self:flex-end;border:1px dashed #C9961E}
+.msg .meta{font-size:.75rem;color:var(--ink2);margin-top:2px}
+.prio-urgent{background:#F9D3CF;color:#8E1B12}.prio-high{background:#FFE0CC;color:#8A3B00}.prio-normal{background:#E5F2DF;color:#2E6B1F}
+.two{display:grid;grid-template-columns:1fr;gap:14px}@media(min-width:900px){.two{grid-template-columns:1.2fr 1fr}}
+.fieldcard img.fp{width:100%;max-height:200px;object-fit:cover;border-radius:12px}
+.timeline{list-style:none;padding:0;margin:0}.timeline li{padding:8px 0;border-bottom:1px solid var(--line);font-size:.93rem}
+.timeline .d{font-size:.8rem;color:var(--soil);font-weight:700}
+.thumbs img{cursor:zoom-in}
+.inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.inline>*{width:auto}
+</style>
 </head>
 <body>
-<header class="top"><span class="brand"><img src="/icon-192.png" alt="" width="34" height="34"><span>Hariyo admin</span></span><button class="x" id="out" style="color:#fff;display:none">Sign out</button></header>
+<header class="top"><span class="brand"><img src="/icon-192.png" alt="" width="34" height="34"><span>Hariyo panel</span></span><span><span class="who" id="who"></span><button class="x" id="out" style="color:#fff;display:none">Sign out</button></span></header>
 <main id="v"><p class="muted">Loading…</p></main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script>
-const sb = window.supabase.createClient("https://filbmvtclfcrrvxckema.supabase.co", "sb_publishable_qbndsVEhemxGLYZa6P3PyQ_iDNmsmmT");
-const $ = s => document.querySelector(s), V = $("#v");
+const SB_URL = "https://filbmvtclfcrrvxckema.supabase.co";
+const sb = window.supabase.createClient(SB_URL, "sb_publishable_qbndsVEhemxGLYZa6P3PyQ_iDNmsmmT");
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)], V = $("#v");
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const dt = d => new Date(d).toLocaleString("en-IN", {day:"numeric", month:"short", hour:"numeric", minute:"2-digit"});
-const waTo = (phone, text) => `https://wa.me/91${phone}?text=${encodeURIComponent(text)}`;
-let tab = "cases";
-const pz = (x, l) => x && (x.level || (x.pests||[]).length || (x.diseases||[]).length || x.other) ? l + ": " + [x.level, ...(x.pests||[]), ...(x.diseases||[]), x.other].filter(Boolean).join(", ") : "";
+const dt = d => d ? new Date(d).toLocaleString("en-IN", {day:"numeric", month:"short", hour:"numeric", minute:"2-digit"}) : "";
+const dd = d => d ? new Date(d).toLocaleDateString("en-IN", {day:"numeric", month:"short", year:"numeric"}) : "";
+const ago = d => { const m = Math.round((Date.now() - new Date(d)) / 60000); return m < 60 ? m + " min ago" : m < 1440 ? Math.round(m / 60) + " h ago" : Math.round(m / 1440) + " days ago"; };
+const today = () => new Date().toISOString().slice(0, 10);
+const fieldPhoto = p => p ? `${SB_URL}/storage/v1/object/public/hariyo-fields/${p}` : "";
+const waTo = (phone, text) => `https://wa.me/91${phone}?text=${encodeURIComponent(text || "")}`;
+const plotName = p => p.farm ? p.farm + (p.block ? " · " + p.block : "") : p.name || p.crop;
 const addr = a => a && a.line1 ? [a.name, a.line1, a.line2, a.city, a.taluka && "Ta. " + a.taluka, a.district, a.state, a.pin, a.phone, a.alt].filter(Boolean).join(", ") : "";
+const pz = x => x && (x.level || (x.pests||[]).length || (x.diseases||[]).length || x.other) ? [x.level, ...(x.pests||[]), ...(x.diseases||[]), x.other].filter(Boolean).join(", ") : "";
+const STATUS = [["new","New"],["in_progress","In progress"],["replied","Replied"],["closed","Closed"]];
+const stLabel = s => (STATUS.find(x => x[0] === s) || [s, s])[1];
+let ME = null, STAFF = [], CROPS = [];
+const isAdmin = () => ME && ME.role === "admin";
+const staffName = e => (STAFF.find(s => s.email === e) || {}).name || e || "Unassigned";
+const staffOpts = (cur, blank) => (blank ? `<option value="">${blank}</option>` : "") + STAFF.filter(s => s.active).map(s => `<option value="${esc(s.email)}" ${s.email === cur ? "selected" : ""}>${esc(s.name)} (${s.role})</option>`).join("");
+const cropName = s => (CROPS.find(c => c.slug === s) || {}).name || s;
 
+/* ---------- sign in ---------- */
 function login(msg) {
-  V.innerHTML = `<form class="card" id="f" style="max-width:420px;margin:30px auto"><h1>Team sign in</h1><p class="muted small">Use the same team email as the CRM dashboard.</p>
+  V.innerHTML = `<form class="card" id="f" style="max-width:420px;margin:30px auto"><h1>Sign in</h1><p class="muted small">For Gujarat Bio Organics admins and crop experts.</p>
   <label for="em">Email</label><input id="em" type="email" required autocomplete="email">
   <label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password">
   <p class="err" id="e">${esc(msg || "")}</p>
   <button class="btn full">Sign in</button>
   <button type="button" class="btn alt full" id="ml" style="margin-top:8px">Email me a sign-in link instead</button></form>`;
   $("#f").onsubmit = async e => { e.preventDefault(); const { error } = await sb.auth.signInWithPassword({ email: $("#em").value, password: $("#pw").value }); if (error) $("#e").textContent = error.message; else boot(); };
-  $("#ml").onclick = async () => { const { error } = await sb.auth.signInWithOtp({ email: $("#em").value, options: { emailRedirectTo: location.origin + "/admin.html", shouldCreateUser: false } }); $("#e").textContent = error ? error.message : "Check your email for the sign-in link."; };
+  $("#ml").onclick = async () => { if (!$("#em").value) { $("#e").textContent = "Enter your email first."; return; } const { error } = await sb.auth.signInWithOtp({ email: $("#em").value, options: { emailRedirectTo: location.origin + "/admin.html" } }); $("#e").textContent = error ? error.message : "Check your email for the sign-in link."; };
 }
-
 async function boot() {
   const { data: { session } } = await sb.auth.getSession();
   if (!session) return login();
-  $("#out").style.display = ""; $("#out").onclick = async () => { await sb.auth.signOut(); location.reload(); };
-  const { error } = await sb.from("hariyo_farmers").select("id", { head: true, count: "exact" });
-  if (error) return login("This email is not on the team list.");
-  show();
+  const email = session.user.email.toLowerCase();
+  const { data: st } = await sb.from("hariyo_staff").select("*").order("name");
+  STAFF = st || [];
+  ME = STAFF.find(s => s.email === email && s.active);
+  if (!ME) { await sb.auth.signOut(); return login("This email is not on the Hariyo staff list. Ask an admin to add you."); }
+  $("#who").textContent = `${ME.name} · ${ME.role}`;
+  $("#out").style.display = ""; $("#out").onclick = async () => { await sb.auth.signOut(); location.hash = ""; location.reload(); };
+  try { CROPS = await fetch("/crops.json").then(r => r.json()); } catch (e) {}
+  window.onhashchange = route; route();
 }
-function nav() { return `<div class="adtabs">${[["cases","Problem reports"],["farmers","Farmers"],["events","Meetings"]].map(([k,l]) => `<button class="btn ${tab===k?"on":"alt"}" data-t="${k}">${l}</button>`).join("")}</div>`; }
-function bindNav() { document.querySelectorAll("[data-t]").forEach(b => b.onclick = () => { tab = b.dataset.t; show(); }); }
-async function show() { if (tab === "cases") return cases(); if (tab === "farmers") return farmers(); return events(); }
+async function nav(cur) {
+  const { count } = await sb.from("hariyo_cases").select("id", { count: "exact", head: true }).in("status", ["new", "in_progress"]);
+  return `<nav class="adnav"><a href="#/" class="${cur==="dash"?"on":""}">Dashboard</a><a href="#/requests" class="${cur==="req"?"on":""}">Requests${count ? `<span class="badge">${count}</span>` : ""}</a><a href="#/farmers" class="${cur==="farm"?"on":""}">Farmers</a><a href="#/meetings" class="${cur==="meet"?"on":""}">Meetings</a>${isAdmin() ? `<a href="#/team" class="${cur==="team"?"on":""}">Team</a>` : ""}</nav>`;
+}
+function route() {
+  const [p, qs] = (location.hash || "#/").slice(1).split("?"), parts = p.split("/").filter(Boolean), q = new URLSearchParams(qs || "");
+  if (parts[0] === "requests") return requests(q);
+  if (parts[0] === "farmers") return farmers(q);
+  if (parts[0] === "farmer") return farmer(parts[1]);
+  if (parts[0] === "meetings") return meetings();
+  if (parts[0] === "team" && isAdmin()) return team();
+  return dashboard();
+}
 
-async function cases() {
-  V.innerHTML = nav() + `<p class="muted">Loading…</p>`; bindNav();
-  const { data } = await sb.from("hariyo_cases").select("*, hariyo_farmers(name,phone,village,district,state), hariyo_plots(name,farm,block,plants,age_years,area,unit,vigha_guntha,start_date,variety,plant_type,soil,water,last_year,issues,pests,details,target,photo)").order("created_at", { ascending: false }).limit(200);
-  const rows = data || [];
-  const urls = {};
-  const all = rows.flatMap(r => r.photos || []);
+/* ---------- dashboard ---------- */
+async function dashboard() {
+  V.innerHTML = await nav("dash") + `<p class="muted">Loading…</p>`;
+  const [f, c, m, fu] = await Promise.all([
+    sb.from("hariyo_farmers").select("id,expert_email,created_at"),
+    sb.from("hariyo_cases").select("id,status,priority,created_at,first_reply_at,issue,crop,expert_email,farmer_id,hariyo_farmers(name,village)").order("created_at", { ascending: false }).limit(500),
+    sb.from("hariyo_messages").select("id,farmer_id,body,created_at,hariyo_farmers(name)").eq("sender", "farmer").order("created_at", { ascending: false }).limit(15),
+    sb.from("hariyo_farmers").select("id,name,village,follow_up").lte("follow_up", today()).order("follow_up")]);
+  const fs = f.data || [], cs = c.data || [], open = cs.filter(x => ["new","in_progress"].includes(x.status));
+  const late = open.filter(x => !x.first_reply_at && Date.now() - new Date(x.created_at) > 86400000);
+  const week = fs.filter(x => Date.now() - new Date(x.created_at) < 7 * 86400000).length;
+  const replied = cs.filter(x => x.first_reply_at), avgH = replied.length ? Math.round(replied.reduce((a, x) => a + (new Date(x.first_reply_at) - new Date(x.created_at)), 0) / replied.length / 3600000) : null;
+  V.innerHTML = await nav("dash") + `<h1>${isAdmin() ? "Overview" : "My farmers"}</h1>
+  <div class="kpis">
+    <a class="kpi" href="#/farmers"><b>${fs.length}</b><span>${isAdmin() ? "Farmers" : "Farmers assigned to me"}</span></a>
+    <a class="kpi" href="#/farmers"><b>${week}</b><span>Joined this week</span></a>
+    <a class="kpi" href="#/requests"><b>${open.length}</b><span>Open requests</span></a>
+    <a class="kpi ${open.filter(x => x.priority === "urgent").length ? "warn" : ""}" href="#/requests?prio=urgent"><b>${open.filter(x => x.priority === "urgent").length}</b><span>Urgent open</span></a>
+    <a class="kpi ${late.length ? "warn" : ""}" href="#/requests"><b>${late.length}</b><span>Waiting over 24 h</span></a>
+    ${isAdmin() ? `<a class="kpi ${fs.filter(x => !x.expert_email).length ? "warn" : ""}" href="#/farmers?expert=none"><b>${fs.filter(x => !x.expert_email).length}</b><span>Farmers without expert</span></a>` : ""}
+    <div class="kpi"><b>${avgH == null ? "–" : avgH + " h"}</b><span>Average first reply</span></div>
+  </div>
+  <div class="two"><div class="card"><h2>Latest open requests</h2>${open.slice(0, 10).map(x => `<p><a href="#/farmer/${x.farmer_id}"><strong>${esc((x.hariyo_farmers||{}).name)}</strong></a> · ${esc(cropName(x.crop))} · ${esc(x.issue || "")} <span class="tag prio-${x.priority||"normal"}">${esc(x.priority || "normal")}</span><br><span class="small muted">${ago(x.created_at)}${isAdmin() ? " · " + esc(staffName(x.expert_email)) : ""}</span></p>`).join("") || `<p class="muted">Nothing open. Well done.</p>`}</div>
+  <div><div class="card"><h2>Follow-ups due</h2>${(fu.data||[]).map(x => `<p><a href="#/farmer/${x.id}">${esc(x.name)}</a> · ${esc(x.village||"")} <span class="small muted">${dd(x.follow_up)}</span></p>`).join("") || `<p class="muted">None due.</p>`}</div>
+  <div class="card"><h2>Latest farmer messages</h2>${(m.data||[]).map(x => `<p><a href="#/farmer/${x.farmer_id}"><strong>${esc((x.hariyo_farmers||{}).name)}</strong></a>: ${esc(x.body.slice(0, 120))} <span class="small muted">${ago(x.created_at)}</span></p>`).join("") || `<p class="muted">No messages yet.</p>`}</div></div></div>`;
+}
+
+/* ---------- requests ---------- */
+async function requests(q) {
+  V.innerHTML = await nav("req") + `<p class="muted">Loading…</p>`;
+  const status = q.get("status") || "open", exp = q.get("expert") || "", prio = q.get("prio") || "";
+  let qr = sb.from("hariyo_cases").select("*, hariyo_farmers(id,name,phone,village,district,expert_email), hariyo_plots(name,farm,block,crop,plants,age_years,area,unit,variety)").order("created_at", { ascending: false }).limit(150);
+  if (status === "open") qr = qr.in("status", ["new","in_progress"]); else if (status !== "all") qr = qr.eq("status", status);
+  if (exp === "none") qr = qr.is("expert_email", null); else if (exp) qr = qr.eq("expert_email", exp);
+  if (prio) qr = qr.eq("priority", prio);
+  const { data } = await qr; const rows = data || [];
+  const ids = rows.map(r => r.id);
+  const { data: msgs } = ids.length ? await sb.from("hariyo_messages").select("*").in("case_id", ids).order("created_at") : { data: [] };
+  const urls = {}, all = rows.flatMap(r => r.photos || []);
   if (all.length) { const { data: s } = await sb.storage.from("hariyo-cases").createSignedUrls(all, 3600); (s || []).forEach(x => urls[x.path] = x.signedUrl); }
-  V.innerHTML = nav() + `<p class="muted">${rows.filter(r => r.status === "new").length} waiting · ${rows.length} total</p>` + rows.map(r => { const f = r.hariyo_farmers || {}; return `<div class="card">
-    <div class="plot"><h3>${esc(f.name)} · ${esc(r.crop)}${r.hariyo_plots ? " · " + esc(r.hariyo_plots.name || "") : ""}</h3><span class="tag ${r.status==="new"?"new":""}">${esc(r.status)}</span></div>
-    <p><strong>${esc(r.issue || "")}</strong> ${r.severity ? `<span class="sev sev-${r.severity}">${esc(r.severity)}</span>` : ""} ${r.happened_on ? `<span class="small muted">since ${esc(r.happened_on)}</span>` : ""}</p>
-    ${r.hariyo_plots ? (() => { const q = r.hariyo_plots, sl = q.soil || {}, w = q.water || {}, ly = q.last_year || {}; const dd = q.details || {}, tg = q.target || {}; return `<p class="small">${[q.farm && "Farm: " + q.farm + (q.block ? " / " + q.block : ""), q.plants && q.plants + " plants", q.age_years && q.age_years + " yrs old", dd.tree_type, dd.spacing, (dd.pump === "Other" ? dd.pump_other : dd.pump) && "Pump: " + (dd.pump === "Other" ? dd.pump_other : dd.pump), tg.yield && "Target: " + tg.yield + " " + (tg.yield_unit || ""), q.variety && "Variety: " + q.variety, q.plant_type, q.start_date && "Planted " + q.start_date, q.area && q.area + " " + q.unit, sl.type && "Soil: " + [sl.type, sl.condition, sl.ph && "pH " + sl.ph, sl.ec && "EC " + sl.ec].filter(Boolean).join(", "), w.source && "Water: " + [w.source === "Other" ? w.other : w.source, w.method, w.ph && "pH " + w.ph, w.ec && "EC " + w.ec, w.tds && "TDS " + w.tds].filter(Boolean).join(", "), ly.yield && "Last year: " + ly.yield + " " + (ly.yield_unit || ""), (q.issues || []).length && "This year: " + q.issues.join(", "), (ly.problems || []).length && "Last year problems: " + ly.problems.join(", "), ly.bearing && "Last season: " + ly.bearing, ly.recovery && "Recovery: " + ly.recovery + "%", pz((q.pests || {}).this, "Pests/diseases this year"), pz((q.pests || {}).last, "Pests/diseases last year")].filter(Boolean).map(esc).join(" · ")}</p>${q.photo ? `<img src="https://filbmvtclfcrrvxckema.supabase.co/storage/v1/object/public/hariyo-fields/${esc(q.photo)}" alt="Field photo" style="width:120px;height:90px;object-fit:cover;border-radius:8px">` : ""}`; })() : ""}
-    <p class="small muted">${dt(r.created_at)} · ${esc(f.village||"")} ${esc(f.district||"")} ${esc(f.state||"")} · <a href="tel:${esc(f.phone)}">${esc(f.phone)}</a></p>
-    <p>${esc(r.problem)}</p>
-    <div class="thumbs">${(r.photos||[]).map(p => urls[p] ? `<a href="${urls[p]}" target="_blank" rel="noopener"><img src="${urls[p]}" alt="Crop photo"></a>` : "").join("")}</div>
-    <label for="r${r.id}">Reply to farmer (shown in the app)</label><textarea id="r${r.id}">${esc(r.reply||"")}</textarea>
-    <div class="row" style="margin-top:8px"><button class="btn" data-save="${r.id}">Save reply</button>
-    <a class="btn tur" target="_blank" rel="noopener" data-wa="${r.id}" href="#">Send on WhatsApp</a>
-    <button class="btn alt" data-close="${r.id}">Mark closed</button></div></div>`; }).join("") || `<div class="card empty">No reports yet.</div>`;
-  bindNav();
-  const byId = Object.fromEntries(rows.map(r => [r.id, r]));
-  document.querySelectorAll("[data-save]").forEach(b => b.onclick = async () => { const id = b.dataset.save; await sb.from("hariyo_cases").update({ reply: $("#r"+id).value, status: "replied", updated_at: new Date().toISOString() }).eq("id", id); cases(); });
-  document.querySelectorAll("[data-close]").forEach(b => b.onclick = async () => { await sb.from("hariyo_cases").update({ status: "closed", updated_at: new Date().toISOString() }).eq("id", b.dataset.close); cases(); });
-  document.querySelectorAll("[data-wa]").forEach(a => a.onclick = () => { const r = byId[a.dataset.wa], f = r.hariyo_farmers || {}; a.href = waTo(f.phone, `Namaste ${f.name}, about your ${r.crop} report on Hariyo: ${$("#r"+r.id).value}`); });
+  V.innerHTML = await nav("req") + `<h1>Requests</h1>
+  <div class="filters"><select id="fs">${[["open","Open"],["new","New"],["in_progress","In progress"],["replied","Replied"],["closed","Closed"],["all","All"]].map(([v,l]) => `<option value="${v}" ${v===status?"selected":""}>${l}</option>`).join("")}</select>
+  <select id="fp"><option value="">Any priority</option>${["urgent","high","normal"].map(v => `<option ${v===prio?"selected":""}>${v}</option>`).join("")}</select>
+  ${isAdmin() ? `<select id="fe"><option value="">All experts</option><option value="none" ${exp==="none"?"selected":""}>Unassigned</option>${staffOpts(exp)}</select>` : ""}</div>
+  <p class="muted">${rows.length} request(s)</p>
+  ${rows.map(r => caseCard(r, (msgs||[]).filter(m => m.case_id === r.id), urls)).join("") || `<div class="card empty">No requests here.</div>`}`;
+  const go = () => { const p = new URLSearchParams({ status: $("#fs").value }); if ($("#fp").value) p.set("prio", $("#fp").value); if ($("#fe") && $("#fe").value) p.set("expert", $("#fe").value); location.hash = "#/requests?" + p; };
+  $("#fs").onchange = go; $("#fp").onchange = go; if ($("#fe")) $("#fe").onchange = go;
+  bindCases(rows, () => requests(q));
+}
+function caseCard(r, msgs, urls) {
+  const f = r.hariyo_farmers || {}, pl = r.hariyo_plots;
+  return `<div class="card" id="c${r.id}"><div class="plot"><h3><a href="#/farmer/${f.id}">${esc(f.name)}</a> · ${esc(cropName(r.crop))}${pl ? " · " + esc(plotName(pl)) : ""}</h3><span><span class="tag prio-${r.priority||"normal"}">${esc(r.priority || "normal")}</span> <span class="tag ${r.status==="new"?"new":""}">${esc(stLabel(r.status))}</span></span></div>
+  <p><strong>${esc(r.issue || "")}</strong>${r.severity ? ` <span class="sev sev-${r.severity}">${esc(r.severity)}</span>` : ""} <span class="small muted">since ${esc(r.happened_on || "")} · reported ${ago(r.created_at)} · ${esc(f.village || "")} ${esc(f.district || "")}</span></p>
+  ${pl ? `<p class="small muted">${[pl.variety, pl.plants && pl.plants + " plants", pl.age_years && pl.age_years + " yrs", pl.area && pl.area + " " + pl.unit].filter(Boolean).map(esc).join(" · ")}</p>` : ""}
+  ${r.problem && r.problem !== r.issue ? `<p>${esc(r.problem)}</p>` : ""}
+  <div class="thumbs">${(r.photos||[]).map(p => urls[p] ? `<a href="${urls[p]}" target="_blank" rel="noopener"><img src="${urls[p]}" alt="Crop photo"></a>` : "").join("")}</div>
+  ${r.reply ? `<div class="msg expert" style="max-width:100%">${esc(r.reply)}<div class="meta">earlier reply</div></div>` : ""}
+  <div class="thread">${msgs.map(msgHtml).join("")}</div>
+  <label for="t${r.id}">Reply to farmer</label><textarea id="t${r.id}" placeholder="Shown in the farmer's app"></textarea>
+  <div class="inline" style="margin-top:8px"><button class="btn" data-send="${r.id}">Send reply</button><label class="flag" style="margin:0"><input type="checkbox" id="i${r.id}"> Internal note (farmer won't see)</label>
+  <a class="btn tur" target="_blank" rel="noopener" data-wa="${r.id}" href="#">WhatsApp</a><a class="btn alt" href="tel:${esc(f.phone)}">Call</a>
+  <select data-status="${r.id}">${STATUS.map(([v,l]) => `<option value="${v}" ${v===r.status?"selected":""}>${l}</option>`).join("")}</select>
+  ${isAdmin() ? `<select data-assign="${r.id}">${staffOpts(r.expert_email, "Unassigned")}</select>` : ""}</div></div>`;
+}
+const msgHtml = m => `<div class="msg ${m.internal ? "internal" : m.sender}">${esc(m.body)}<div class="meta">${m.internal ? "Internal note · " : ""}${esc(m.sender === "farmer" ? "Farmer" : m.sender_name || "Expert")} · ${dt(m.created_at)}${m.sender === "expert" && !m.internal ? (m.read_at ? " · seen" : " · not seen yet") : ""}</div></div>`;
+function bindCases(rows, reload) {
+  const by = Object.fromEntries(rows.map(r => [r.id, r]));
+  $$("[data-send]").forEach(b => b.onclick = async () => { const r = by[b.dataset.send], t = $("#t" + r.id).value.trim(); if (!t) return;
+    b.disabled = true; await sb.from("hariyo_messages").insert({ farmer_id: r.farmer_id, case_id: r.id, sender: "expert", sender_email: ME.email, sender_name: ME.name, body: t, internal: $("#i" + r.id).checked }); reload(); });
+  $$("[data-wa]").forEach(a => a.onclick = () => { const r = by[a.dataset.wa], f = r.hariyo_farmers || {}; a.href = waTo(f.phone, `Namaste ${f.name}, about your ${cropName(r.crop)} report on Hariyo (${r.issue || ""}): ${$("#t" + r.id).value}`); });
+  $$("[data-status]").forEach(s => s.onchange = async () => { await sb.from("hariyo_cases").update({ status: s.value, updated_at: new Date().toISOString() }).eq("id", s.dataset.status); reload(); });
+  $$("[data-assign]").forEach(s => s.onchange = async () => { await sb.from("hariyo_cases").update({ expert_email: s.value || null }).eq("id", s.dataset.assign); reload(); });
 }
 
-async function farmers() {
-  V.innerHTML = nav() + `<p class="muted">Loading…</p>`; bindNav();
-  const { data } = await sb.from("hariyo_farmers").select("name,phone,village,district,state,vigha_guntha,address,created_at,hariyo_plots(crop,name,farm,block,plants,age_years,area,unit,vigha_guntha,start_date), hariyo_activities(count)").order("created_at", { ascending: false }).limit(1000);
-  const rows = data || [];
-  V.innerHTML = nav() + `<div class="row" style="margin-bottom:10px"><p class="muted">${rows.length} farmers</p><button class="btn alt" id="csv" style="flex:0 0 auto">Download CSV</button></div>
-  <div class="card" style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Phone</th><th>Place</th><th>Vigha</th><th>Fields</th><th>Diary entries</th><th>Delivery address</th><th>Joined</th></tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r.name)}</td><td><a href="https://wa.me/91${esc(r.phone)}" target="_blank" rel="noopener">${esc(r.phone)}</a></td><td>${esc([r.village,r.district,r.state].filter(Boolean).join(", "))}</td><td>${r.vigha_guntha ? r.vigha_guntha + " g" : ""}</td><td>${esc((r.hariyo_plots||[]).map(p => ((p.farm || p.name) ? (p.farm || p.name) + (p.block ? " / " + p.block : "") + ": " : "") + p.crop + (p.plants ? ` (${p.plants} plants, ${p.age_years || "?"} yrs)` : p.area ? ` (${p.area} ${p.unit})` : "")).join(", "))}</td><td>${r.hariyo_activities?.[0]?.count || 0}</td><td class="small">${esc(addr(r.address))}</td><td>${dt(r.created_at)}</td></tr>`).join("")}</tbody></table></div>`;
-  bindNav();
-  $("#csv").onclick = () => { const q = s => `"${String(s ?? "").replace(/"/g,'""')}"`; const csv = ["name,phone,village,district,state,vigha_guntha,crops,address,joined"].concat(rows.map(r => [r.name,r.phone,r.village,r.district,r.state,r.vigha_guntha,(r.hariyo_plots||[]).map(p=>p.crop).join(" "),addr(r.address),r.created_at].map(q).join(","))).join("\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "hariyo-farmers.csv"; a.click(); };
+/* ---------- farmers ---------- */
+async function farmers(q) {
+  V.innerHTML = await nav("farm") + `<p class="muted">Loading…</p>`;
+  const { data } = await sb.from("hariyo_farmers").select("id,name,phone,village,district,state,vigha_guntha,expert_email,follow_up,tags,created_at,address,hariyo_plots(crop,name,farm,block,plants,age_years,area,unit),hariyo_cases(status)").order("created_at", { ascending: false }).limit(2000);
+  let rows = data || [];
+  const term = (q.get("q") || "").toLowerCase(), exp = q.get("expert") || "", crop = q.get("crop") || "", dist = q.get("district") || "";
+  if (term) rows = rows.filter(r => [r.name, r.phone, r.village, r.district, r.tags].join(" ").toLowerCase().includes(term));
+  if (exp === "none") rows = rows.filter(r => !r.expert_email); else if (exp) rows = rows.filter(r => r.expert_email === exp);
+  if (crop) rows = rows.filter(r => (r.hariyo_plots||[]).some(p => p.crop === crop));
+  if (dist) rows = rows.filter(r => (r.district || "").toLowerCase() === dist.toLowerCase());
+  const dists = [...new Set((data||[]).map(r => r.district).filter(Boolean))].sort();
+  V.innerHTML = await nav("farm") + `<h1>Farmers</h1>
+  <div class="filters"><input id="fq" placeholder="Search name, phone, village, tag" value="${esc(q.get("q")||"")}">
+  <select id="fc"><option value="">All crops</option>${CROPS.map(c => `<option value="${c.slug}" ${c.slug===crop?"selected":""}>${esc(c.name)}</option>`).join("")}</select>
+  <select id="fd"><option value="">All districts</option>${dists.map(d => `<option ${d===dist?"selected":""}>${esc(d)}</option>`).join("")}</select>
+  ${isAdmin() ? `<select id="fe"><option value="">All experts</option><option value="none" ${exp==="none"?"selected":""}>Unassigned</option>${staffOpts(exp)}</select>` : ""}</div>
+  <div class="inline" style="margin-bottom:10px"><span class="muted">${rows.length} farmer(s)</span><button class="btn alt" id="csv">Download CSV</button>
+  ${isAdmin() ? `<select id="bulk">${staffOpts("", "Assign the filtered farmers to…")}</select>` : ""}</div>
+  <div class="card" style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Phone</th><th>Place</th><th>Fields</th><th>Open</th><th>Expert</th><th>Follow-up</th><th>Joined</th></tr></thead><tbody>
+  ${rows.map(r => `<tr class="click" data-id="${r.id}"><td><strong>${esc(r.name)}</strong>${r.tags ? `<br><span class="small muted">${esc(r.tags)}</span>` : ""}</td><td>${esc(r.phone)}</td><td>${esc([r.village, r.district].filter(Boolean).join(", "))}</td>
+  <td class="small">${esc((r.hariyo_plots||[]).map(p => `${cropName(p.crop)}${p.plants ? ` (${p.plants} plants)` : p.area ? ` (${p.area} ${p.unit})` : ""}`).join(", "))}</td>
+  <td>${(r.hariyo_cases||[]).filter(c => ["new","in_progress"].includes(c.status)).length || ""}</td><td class="small">${esc(staffName(r.expert_email))}</td><td class="small">${dd(r.follow_up)}</td><td class="small">${dd(r.created_at)}</td></tr>`).join("")}</tbody></table></div>`;
+  const go = () => { const p = new URLSearchParams(); [["q","#fq"],["crop","#fc"],["district","#fd"],["expert","#fe"]].forEach(([k, s]) => { if ($(s) && $(s).value) p.set(k, $(s).value); }); location.hash = "#/farmers?" + p; };
+  $("#fq").onchange = go; $("#fc").onchange = go; $("#fd").onchange = go; if ($("#fe")) $("#fe").onchange = go;
+  $$("tr.click").forEach(t => t.onclick = () => location.hash = "#/farmer/" + t.dataset.id);
+  if ($("#bulk")) $("#bulk").onchange = async () => { const e = $("#bulk").value; if (!e || !confirm(`Assign ${rows.length} farmer(s) to ${staffName(e)}?`)) return;
+    for (let i = 0; i < rows.length; i += 200) await sb.from("hariyo_farmers").update({ expert_email: e }).in("id", rows.slice(i, i + 200).map(r => r.id));
+    farmers(q); };
+  $("#csv").onclick = () => { const qq = s => `"${String(s ?? "").replace(/"/g,'""')}"`; const csv = ["name,phone,village,district,state,vigha_guntha,expert,fields,address,joined"].concat(rows.map(r => [r.name,r.phone,r.village,r.district,r.state,r.vigha_guntha,staffName(r.expert_email),(r.hariyo_plots||[]).map(p=>cropName(p.crop)).join(" "),addr(r.address),r.created_at].map(qq).join(","))).join("\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "hariyo-farmers.csv"; a.click(); };
 }
 
-async function events() {
-  V.innerHTML = nav() + `<p class="muted">Loading…</p>`; bindNav();
+/* ---------- one farmer: everything ---------- */
+async function farmer(id) {
+  V.innerHTML = await nav("farm") + `<p class="muted">Loading…</p>`;
+  const [f, pl, ac, ob, cs, ms] = await Promise.all([
+    sb.from("hariyo_farmers").select("*").eq("id", id).maybeSingle(),
+    sb.from("hariyo_plots").select("*").eq("farmer_id", id).order("created_at"),
+    sb.from("hariyo_activities").select("*").eq("farmer_id", id).order("happened_on", { ascending: false }),
+    sb.from("hariyo_observations").select("*").eq("farmer_id", id).order("observed_on", { ascending: false }),
+    sb.from("hariyo_cases").select("*, hariyo_farmers(id,name,phone,village,district), hariyo_plots(name,farm,block,crop,plants,age_years,area,unit,variety)").eq("farmer_id", id).order("created_at", { ascending: false }),
+    sb.from("hariyo_messages").select("*").eq("farmer_id", id).order("created_at")]);
+  const F = f.data; if (!F) { V.innerHTML = await nav("farm") + `<div class="card empty">Farmer not found or not assigned to you.</div>`; return; }
+  const plots = pl.data || [], acts = ac.data || [], obs = ob.data || [], cases = cs.data || [], msgs = ms.data || [];
+  const urls = {}, all = cases.flatMap(r => r.photos || []);
+  if (all.length) { const { data: s } = await sb.storage.from("hariyo-cases").createSignedUrls(all, 3600); (s || []).forEach(x => urls[x.path] = x.signedUrl); }
+  const pn = pid => { const p = plots.find(x => x.id === pid); return p ? plotName(p) : ""; };
+  const tl = [...acts.map(a => ({ d: a.happened_on, t: `${a.happened_on > today() ? "Planned: " : ""}${esc(a.kind)}${a.product ? " · " + esc(a.product) : ""}${a.qty ? ` · ${a.qty} ${esc(a.qty_unit||"")} per ${esc(a.per_unit||"")}` : ""}${a.method ? " · " + esc(a.method) : ""}`, p: a.plot_id })),
+    ...obs.map(o => ({ d: o.observed_on, t: `Status: ${esc(o.look || "")} ${Object.entries(o.data || {}).map(([k, v]) => esc(k + ": " + v)).join(", ")} ${o.germination ? "· germination " + esc(o.germination) : ""} ${o.count_band ? "· count " + esc(o.count_band) : ""} ${o.height ? `· height ${o.height} ${esc(o.height_unit||"")}` : ""}${o.photo ? ` <a href="${fieldPhoto(o.photo)}" target="_blank" rel="noopener">photo</a>` : ""}`, p: o.plot_id })),
+    ...cases.map(c => ({ d: c.happened_on || c.created_at.slice(0, 10), t: `<strong>Problem:</strong> ${esc(c.issue || c.problem)} (${esc(stLabel(c.status))})`, p: c.plot_id }))].sort((a, b) => a.d < b.d ? 1 : -1);
+  const general = msgs.filter(m => !m.case_id);
+  V.innerHTML = await nav("farm") + `<p><a href="#/farmers">← Farmers</a></p>
+  <div class="two"><div>
+    <div class="card"><h1>${esc(F.name)}</h1><p>${esc([F.village, F.district, F.state].filter(Boolean).join(", "))} · <a href="tel:${esc(F.phone)}">${esc(F.phone)}</a> · <a href="${waTo(F.phone, "Namaste " + F.name + ", ")}" target="_blank" rel="noopener">WhatsApp</a></p>
+    <p class="small muted">Joined ${dd(F.created_at)}${F.vigha_guntha ? ` · vigha ${F.vigha_guntha} guntha` : ""}</p>
+    ${addr(F.address) ? `<p class="small"><strong>Delivery address:</strong> ${esc(addr(F.address))}</p>` : ""}
+    <div class="row"><div><label for="ex">Expert</label><select id="ex" ${isAdmin() ? "" : "disabled"}>${staffOpts(F.expert_email, "Unassigned")}</select></div>
+    <div><label for="fu">Follow-up date</label><input id="fu" type="date" value="${esc(F.follow_up || "")}"></div></div>
+    <label for="tg">Tags (comma separated)</label><input id="tg" value="${esc(F.tags || "")}" placeholder="e.g. big grower, demo farmer, sugar factory group">
+    <button class="btn" id="sv" style="margin-top:10px">Save</button> <span class="ok" id="svok"></span></div>
+    <h2>Fields and orchards (${plots.length})</h2>
+    ${plots.map(p => { const sl = p.soil || {}, w = p.water || {}, ly = p.last_year || {}, d = p.details || {}, tg = p.target || {}, lo = obs.find(o => o.plot_id === p.id);
+      return `<div class="card fieldcard">${p.photo ? `<img class="fp" src="${fieldPhoto(p.photo)}" alt="Field photo">` : ""}<h3>${esc(plotName(p))} · ${esc(cropName(p.crop))}</h3>
+      <dl class="facts">${[["Size", [p.plants && p.plants + " plants", p.age_years && p.age_years + " yrs", p.area && `${p.area} ${p.unit}${p.vigha_guntha ? ` (${p.vigha_guntha} g)` : ""}`].filter(Boolean).join(" · ")], ["Planted", dd(p.start_date)], ["Variety", [p.variety, p.plant_type].filter(Boolean).join(", ")], ["Tree / spacing", [d.tree_type, d.spacing === "Other" ? d.spacing_other : d.spacing].filter(Boolean).join(", ")], ["Spray pump", d.pump === "Other" ? d.pump_other : d.pump],
+        ["Soil", [sl.type, sl.condition, sl.ph && "pH " + sl.ph, sl.ec && "EC " + sl.ec].filter(Boolean).join(", ")], ["Water", [w.source === "Other" ? w.other : w.source, w.method, w.ph && "pH " + w.ph, w.ec && "EC " + w.ec, w.tds && "TDS " + w.tds].filter(Boolean).join(", ")],
+        ["This year", (p.issues||[]).join(", ")], ["Pests this year", pz((p.pests||{}).this)], ["Last year", [ly.yield && ly.yield + " " + (ly.yield_unit||""), ly.bearing, ly.recovery && "recovery " + ly.recovery + "%", (ly.problems||[]).join(", ")].filter(Boolean).join(" · ")], ["Pests last year", pz((p.pests||{}).last)],
+        ["Target", [tg.yield && tg.yield + " " + (tg.yield_unit||""), tg.fruits && tg.fruits + " fruits/tree", tg.grade, tg.tillers && tg.tillers + " canes/clump", tg.harvest, tg.note].filter(Boolean).join(" · ")],
+        ["Latest status", lo ? `${dd(lo.observed_on)}: ${[lo.look, ...Object.values(lo.data||{}), lo.germination, lo.count_band, lo.height && lo.height + " " + (lo.height_unit||"")].filter(Boolean).join(", ")}` : ""]].filter(x => x[1]).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl></div>`; }).join("") || `<p class="muted">No fields yet.</p>`}
+    <div class="card"><h2>History</h2><ul class="timeline">${tl.map(x => `<li><div class="d">${dd(x.d)}${x.p ? " · " + esc(pn(x.p)) : ""}</div>${x.t}</li>`).join("") || `<li class="muted">Nothing recorded yet.</li>`}</ul></div>
+  </div><div>
+    <div class="card"><h2>Messages</h2><div class="thread" id="gth">${general.map(msgHtml).join("") || `<p class="muted small">No general messages yet.</p>`}</div>
+    <textarea id="gm" placeholder="Message to the farmer (shown in their app)"></textarea>
+    <div class="inline" style="margin-top:8px"><button class="btn" id="gs">Send</button><label class="flag" style="margin:0"><input type="checkbox" id="gi"> Internal note</label></div></div>
+    <h2>Requests (${cases.length})</h2>${cases.map(r => caseCard(r, msgs.filter(m => m.case_id === r.id), urls)).join("") || `<p class="muted">No requests.</p>`}
+  </div></div>`;
+  $("#sv").onclick = async () => { const u = { follow_up: $("#fu").value || null, tags: $("#tg").value.trim() || null }; if (isAdmin()) u.expert_email = $("#ex").value || null;
+    const { error } = await sb.from("hariyo_farmers").update(u).eq("id", id); $("#svok").textContent = error ? error.message : "Saved"; };
+  $("#gs").onclick = async () => { const t = $("#gm").value.trim(); if (!t) return; $("#gs").disabled = true;
+    await sb.from("hariyo_messages").insert({ farmer_id: id, sender: "expert", sender_email: ME.email, sender_name: ME.name, body: t, internal: $("#gi").checked }); farmer(id); };
+  bindCases(cases, () => farmer(id));
+  await sb.from("hariyo_messages").update({ read_at: new Date().toISOString() }).eq("farmer_id", id).eq("sender", "farmer").is("read_at", null);
+}
+
+/* ---------- meetings ---------- */
+async function meetings() {
+  V.innerHTML = await nav("meet") + `<p class="muted">Loading…</p>`;
   const { data } = await sb.from("hariyo_events").select("*, hariyo_registrations(count)").order("starts_at", { ascending: false });
-  V.innerHTML = nav() + `<form class="card" id="f"><h2>Add a meeting</h2>
+  V.innerHTML = await nav("meet") + `<h1>Meetings</h1><form class="card" id="f"><h2>Add a meeting</h2>
     <label for="t">Title</label><input id="t" required placeholder="Sugarcane: a gap-free season">
     <div class="row"><div><label for="w">Date and time</label><input id="w" type="datetime-local" required></div><div><label for="m">Type</label><select id="m"><option value="zoom">Online (Zoom)</option><option value="village">Village meeting</option></select></div></div>
     <div class="row"><div><label for="c">Crop (optional)</label><input id="c" placeholder="sugarcane"></div><div><label for="l">Language</label><input id="l" value="Gujarati"></div></div>
-    <label for="p">Place (village meetings)</label><input id="p">
-    <label for="k">Zoom link (online)</label><input id="k" type="url">
-    <label for="d">Short description</label><textarea id="d"></textarea>
-    <button class="btn full" style="margin-top:10px">Publish meeting</button></form>
+    <label for="p">Place (village meetings)</label><input id="p"><label for="k">Zoom link (online)</label><input id="k" type="url">
+    <label for="d">Short description</label><textarea id="d"></textarea><button class="btn full" style="margin-top:10px">Publish meeting</button></form>
   ${(data||[]).map(e => `<div class="card"><div class="plot"><h3>${esc(e.title)}</h3><span class="tag">${e.hariyo_registrations?.[0]?.count || 0} registered</span></div><p class="small muted">${dt(e.starts_at)} · ${e.mode === "zoom" ? "Zoom" : esc(e.place)} · ${esc(e.language)}</p><button class="x" data-off="${e.id}" data-a="${e.active}">${e.active ? "Hide from app" : "Show in app"}</button></div>`).join("")}`;
-  bindNav();
-  $("#f").onsubmit = async ev => { ev.preventDefault(); const { error } = await sb.from("hariyo_events").insert({ title: $("#t").value, starts_at: new Date($("#w").value).toISOString(), mode: $("#m").value, crop: $("#c").value || null, language: $("#l").value, place: $("#p").value || null, link: $("#k").value || null, description: $("#d").value || null }); if (error) alert(error.message); else events(); };
-  document.querySelectorAll("[data-off]").forEach(b => b.onclick = async () => { await sb.from("hariyo_events").update({ active: b.dataset.a !== "true" }).eq("id", b.dataset.off); events(); });
+  $("#f").onsubmit = async ev => { ev.preventDefault(); const { error } = await sb.from("hariyo_events").insert({ title: $("#t").value, starts_at: new Date($("#w").value).toISOString(), mode: $("#m").value, crop: $("#c").value || null, language: $("#l").value, place: $("#p").value || null, link: $("#k").value || null, description: $("#d").value || null }); if (error) alert(error.message); else meetings(); };
+  $$("[data-off]").forEach(b => b.onclick = async () => { await sb.from("hariyo_events").update({ active: b.dataset.a !== "true" }).eq("id", b.dataset.off); meetings(); });
 }
-sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_IN" && !$("#out").style.display) boot(); });
+
+/* ---------- team (admins) ---------- */
+async function team() {
+  V.innerHTML = await nav("team") + `<p class="muted">Loading…</p>`;
+  const [{ data: st }, { data: fa }, { data: cs }] = await Promise.all([sb.from("hariyo_staff").select("*").order("name"), sb.from("hariyo_farmers").select("expert_email,district"), sb.from("hariyo_cases").select("expert_email,status,created_at,first_reply_at")]);
+  STAFF = st || [];
+  const load = e => ({ f: (fa||[]).filter(x => x.expert_email === e).length, o: (cs||[]).filter(x => x.expert_email === e && ["new","in_progress"].includes(x.status)).length });
+  V.innerHTML = await nav("team") + `<h1>Team</h1>
+  <div class="card" style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Phone</th><th>Districts</th><th>Crops</th><th>Farmers</th><th>Open</th><th></th></tr></thead><tbody>
+  ${STAFF.map(s => { const l = load(s.email); return `<tr><td><strong>${esc(s.name)}</strong>${s.active ? "" : ' <span class="tag">inactive</span>'}</td><td class="small">${esc(s.email)}</td><td><select data-role="${esc(s.email)}" ${s.email === ME.email ? "disabled" : ""}><option ${s.role==="expert"?"selected":""}>expert</option><option ${s.role==="admin"?"selected":""}>admin</option></select></td><td class="small">${esc(s.phone||"")}</td><td class="small">${esc(s.districts||"")}</td><td class="small">${esc(s.crops||"")}</td><td>${l.f}</td><td>${l.o}</td><td>${s.email === ME.email ? "" : `<button class="x" data-act="${esc(s.email)}" data-a="${s.active}">${s.active ? "Deactivate" : "Activate"}</button>`}</td></tr>`; }).join("")}</tbody></table></div>
+  <form class="card" id="f"><h2>Add an expert or admin</h2>
+    <div class="row"><div><label for="n">Name</label><input id="n" required></div><div><label for="e">Email (used to sign in)</label><input id="e" type="email" required></div></div>
+    <div class="row"><div><label for="r">Role</label><select id="r"><option value="expert">Expert (sees assigned farmers)</option><option value="admin">Admin (sees everything)</option></select></div><div><label for="ph">Phone (shown to their farmers)</label><input id="ph" type="tel"></div></div>
+    <div class="row"><div><label for="ds">Districts covered (comma separated)</label><input id="ds" placeholder="Navsari, Surat, Valsad"></div><div><label for="cr">Crops (optional)</label><input id="cr" placeholder="mango, sugarcane"></div></div>
+    <p class="err" id="fe"></p><button class="btn">Add to team</button>
+    <p class="small muted" style="margin-top:8px">They sign in on this page with "Email me a sign-in link" using this email. They do not get access to the CRM.</p></form>
+  <div class="card"><h2>Auto-assign by district</h2><p class="muted small">Gives every farmer who has no expert to the active expert whose "districts covered" includes the farmer's district.</p><button class="btn alt" id="auto">Auto-assign unassigned farmers</button> <span class="ok" id="autook"></span></div>`;
+  $("#f").onsubmit = async ev => { ev.preventDefault(); const { error } = await sb.from("hariyo_staff").insert({ name: $("#n").value.trim(), email: $("#e").value.trim().toLowerCase(), role: $("#r").value, phone: $("#ph").value.trim() || null, districts: $("#ds").value.trim() || null, crops: $("#cr").value.trim() || null }); if (error) $("#fe").textContent = error.message; else team(); };
+  $$("[data-role]").forEach(s => s.onchange = async () => { await sb.from("hariyo_staff").update({ role: s.value }).eq("email", s.dataset.role); team(); });
+  $$("[data-act]").forEach(b => b.onclick = async () => { await sb.from("hariyo_staff").update({ active: b.dataset.a !== "true" }).eq("email", b.dataset.act); team(); });
+  $("#auto").onclick = async () => { const { data: un } = await sb.from("hariyo_farmers").select("id,district").is("expert_email", null); let n = 0;
+    for (const f of un || []) { const d = (f.district || "").trim().toLowerCase(); if (!d) continue; const s = STAFF.find(x => x.active && x.role === "expert" && (x.districts || "").toLowerCase().split(",").map(y => y.trim()).includes(d)); if (s) { await sb.from("hariyo_farmers").update({ expert_email: s.email }).eq("id", f.id); n++; } }
+    $("#autook").textContent = `${n} farmer(s) assigned.`; };
+}
+sb.auth.onAuthStateChange(ev => { if (ev === "SIGNED_IN" && !ME) boot(); });
 boot();
 </script>
 </body>

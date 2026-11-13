@@ -127,3 +127,9 @@ form h2{margin-top:18px}
 details.card summary{cursor:pointer;list-style:none}details.card summary::-webkit-details-marker{display:none}
 details.card summary strong::after{content:" ›";color:var(--leaf)}details.card[open] summary strong::after{content:" ⌄"}
 .act-grid .wide{grid-column:1/-1}
+.chat{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.bubble{max-width:85%;padding:8px 11px;border-radius:12px;font-size:.95rem}
+.bubble span{display:block;font-size:.72rem;color:var(--ink2);margin-top:2px}
+.bubble.farmer{align-self:flex-end;background:#E5F2DF}.bubble.expert{align-self:flex-start;background:#fff;border:1px solid var(--line)}
+.inline-reply{display:flex;gap:8px;margin-top:8px}.inline-reply input{flex:1;min-width:0}.inline-reply .btn{min-height:46px;padding:0 16px}
+.tabs a{position:relative}.tabs .dot{position:absolute;top:4px;right:calc(50% - 22px);background:#C0392B;color:#fff;font-style:normal;font-size:.7rem;font-weight:700;min-width:18px;height:18px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 4px}
