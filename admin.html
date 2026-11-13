@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hariyo admin</title><meta name="robots" content="noindex">
-<link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/app.css?v=1">
+<link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/app.css?v=3">
 <style>body{padding-bottom:20px}main{max-width:900px}.adtabs{display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap}.adtabs button{min-height:42px}.adtabs button.on{background:var(--leafd);color:#fff}
 table{width:100%;border-collapse:collapse;font-size:.95rem}td,th{padding:8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}.thumbs img{cursor:pointer}</style>
 </head>
@@ -44,13 +44,14 @@ async function show() { if (tab === "cases") return cases(); if (tab === "farmer
 
 async function cases() {
   V.innerHTML = nav() + `<p class="muted">Loading…</p>`; bindNav();
-  const { data } = await sb.from("hariyo_cases").select("*, hariyo_farmers(name,phone,village,district,state)").order("created_at", { ascending: false }).limit(200);
+  const { data } = await sb.from("hariyo_cases").select("*, hariyo_farmers(name,phone,village,district,state), hariyo_plots(name,area,unit,start_date)").order("created_at", { ascending: false }).limit(200);
   const rows = data || [];
   const urls = {};
   const all = rows.flatMap(r => r.photos || []);
   if (all.length) { const { data: s } = await sb.storage.from("hariyo-cases").createSignedUrls(all, 3600); (s || []).forEach(x => urls[x.path] = x.signedUrl); }
   V.innerHTML = nav() + `<p class="muted">${rows.filter(r => r.status === "new").length} waiting · ${rows.length} total</p>` + rows.map(r => { const f = r.hariyo_farmers || {}; return `<div class="card">
-    <div class="plot"><h3>${esc(f.name)} · ${esc(r.crop)}</h3><span class="tag ${r.status==="new"?"new":""}">${esc(r.status)}</span></div>
+    <div class="plot"><h3>${esc(f.name)} · ${esc(r.crop)}${r.hariyo_plots ? " · " + esc(r.hariyo_plots.name || "") : ""}</h3><span class="tag ${r.status==="new"?"new":""}">${esc(r.status)}</span></div>
+    <p><strong>${esc(r.issue || "")}</strong> ${r.severity ? `<span class="sev sev-${r.severity}">${esc(r.severity)}</span>` : ""} ${r.happened_on ? `<span class="small muted">since ${esc(r.happened_on)}</span>` : ""}</p>
     <p class="small muted">${dt(r.created_at)} · ${esc(f.village||"")} ${esc(f.district||"")} ${esc(f.state||"")} · <a href="tel:${esc(f.phone)}">${esc(f.phone)}</a></p>
     <p>${esc(r.problem)}</p>
     <div class="thumbs">${(r.photos||[]).map(p => urls[p] ? `<a href="${urls[p]}" target="_blank" rel="noopener"><img src="${urls[p]}" alt="Crop photo"></a>` : "").join("")}</div>
@@ -67,10 +68,10 @@ async function cases() {
 
 async function farmers() {
   V.innerHTML = nav() + `<p class="muted">Loading…</p>`; bindNav();
-  const { data } = await sb.from("hariyo_farmers").select("name,phone,village,district,state,created_at,hariyo_plots(crop,acres,start_date)").order("created_at", { ascending: false }).limit(1000);
+  const { data } = await sb.from("hariyo_farmers").select("name,phone,village,district,state,created_at,hariyo_plots(crop,name,area,unit,start_date), hariyo_activities(count)").order("created_at", { ascending: false }).limit(1000);
   const rows = data || [];
   V.innerHTML = nav() + `<div class="row" style="margin-bottom:10px"><p class="muted">${rows.length} farmers</p><button class="btn alt" id="csv" style="flex:0 0 auto">Download CSV</button></div>
-  <div class="card" style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Phone</th><th>Place</th><th>Crops</th><th>Joined</th></tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r.name)}</td><td><a href="https://wa.me/91${esc(r.phone)}" target="_blank" rel="noopener">${esc(r.phone)}</a></td><td>${esc([r.village,r.district,r.state].filter(Boolean).join(", "))}</td><td>${esc((r.hariyo_plots||[]).map(p => p.crop + (p.acres ? ` (${p.acres} ac)` : "")).join(", "))}</td><td>${dt(r.created_at)}</td></tr>`).join("")}</tbody></table></div>`;
+  <div class="card" style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Phone</th><th>Place</th><th>Fields</th><th>Diary entries</th><th>Joined</th></tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r.name)}</td><td><a href="https://wa.me/91${esc(r.phone)}" target="_blank" rel="noopener">${esc(r.phone)}</a></td><td>${esc([r.village,r.district,r.state].filter(Boolean).join(", "))}</td><td>${esc((r.hariyo_plots||[]).map(p => (p.name ? p.name + ": " : "") + p.crop + (p.area ? ` (${p.area} ${p.unit})` : "")).join(", "))}</td><td>${r.hariyo_activities?.[0]?.count || 0}</td><td>${dt(r.created_at)}</td></tr>`).join("")}</tbody></table></div>`;
   bindNav();
   $("#csv").onclick = () => { const q = s => `"${String(s ?? "").replace(/"/g,'""')}"`; const csv = ["name,phone,village,district,state,crops,joined"].concat(rows.map(r => [r.name,r.phone,r.village,r.district,r.state,(r.hariyo_plots||[]).map(p=>p.crop).join(" "),r.created_at].map(q).join(","))).join("\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "hariyo-farmers.csv"; a.click(); };
 }
