@@ -61,7 +61,7 @@ function signup(next) {
     ev.preventDefault(); $("#b").disabled = true; $("#e").textContent = "";
     const { data, error } = await sb.rpc("hariyo_register", { p_name: $("#n").value, p_phone: $("#p").value, p_village: $("#v").value, p_district: $("#d").value, p_state: $("#s").value });
     if (error) { $("#e").textContent = error.message.includes("10-digit") ? "Please enter your name and a 10-digit mobile number." : "Could not save. Check your internet and try again."; $("#b").disabled = false; return; }
-    TOKEN = data; store.set("hariyo_token", data); await loadMe(); location.hash = next || "#/farm";
+    TOKEN = data; store.set("hariyo_token", data); await loadMe(); const to = next || "#/farm"; if (location.hash === to) route(); else location.hash = to;
   };
 }
 const needMe = next => { if (!ME) { signup(next); return false; } return true; };
@@ -138,7 +138,7 @@ function farm(q) {
     $("#b").disabled = true;
     const { error } = await sb.rpc("hariyo_add_plot", { p_token: TOKEN, p_crop: c.slug, p_acres: $("#a").value ? Number($("#a").value) : null, p_start: c.timing.mode === "days" ? $("#sd").value : null });
     if (error) { $("#e").textContent = "Could not save. Try again."; $("#b").disabled = false; return; }
-    await loadMe(); location.hash = "#/home";
+    await loadMe(); if (location.hash === "#/home") route(); else location.hash = "#/home";
   };
   document.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
     if (!confirm("Remove this crop from your farm?")) return;
